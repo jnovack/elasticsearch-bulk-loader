@@ -54,17 +54,16 @@ or from the command-line.
 
 | Flag                 | Description                                                                 |
 |----------------------|-----------------------------------------------------------------------------|
-| `-config`            | Path to configuration file with settings
+| `-config`            | Path to configuration file with settings                                    |
 | `-url`               | Elasticsearch URL (e.g., `http://localhost:9200`)                           |
-| `-insecureSkipVerify`| Skip TLS verification for HTTPS                                            |
-| `-index`             | Target Elasticsearch index name (**required**)                             |
-| `-data`              | Path to JSON array of documents to load (**required**)                     |
-| `-settings`          | Optional path to JSON file with index settings                             |
-| `-mappings`          | Optional path to JSON file with index mappings                             |
+| `-insecureSkipVerify`| Skip TLS verification for HTTPS                                             |
+| `-index`             | Target Elasticsearch index name (**required**)                              |
+| `-data`              | Path to JSON array of documents to load (**required**)                      |
+| `-settings`          | Optional path to JSON file with index settings                              |
+| `-mappings`          | Optional path to JSON file with index mappings                              |
 | `-batch`             | Number of documents per bulk insert (default: 1000)                         |
 | `-add`               | Append to an existing index or create it if it doesn’t exist                |
-| `-delete`            | Delete the index if it exists before recreating it                         |
-
+| `-delete`            | Delete the index if it exists before recreating it                          |
 
 ## Behavior Summary
 
@@ -125,4 +124,3 @@ delete=true
 ## 👥 License
 
 MIT License © 2025
-```
