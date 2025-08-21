@@ -1,5 +1,5 @@
 name: Build Docker Image
-# v1.0.1
+# v1.0.2
 
 on:
   push:
@@ -12,6 +12,8 @@ jobs:
   push_to_registry:
     name: Push Docker image to Docker Hub
     runs-on: ubuntu-latest
+    env:
+      RELEASE_DATE: ""
     permissions:
       packages: write
       contents: read
@@ -60,7 +62,7 @@ jobs:
           push: true
           platforms: linux/amd64,linux/arm64
           build-args: |
-              "APPLICATION=${{ github.event.repository.name }}"
+              "APPLICATION=${{ vars.DOCKER_APPLICATION || github.event.repository.name }}"
               "BUILD_RFC3339=${{ env.RELEASE_DATE }}"
               DESCRIPTION="${{ github.event.repository.description }}"
               "PACKAGE=${{ github.repository }}"
