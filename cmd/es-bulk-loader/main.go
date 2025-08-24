@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"crypto/tls"
 	"encoding/json"
@@ -11,9 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jnovack/flag"
-
 	elasticsearch "github.com/elastic/go-elasticsearch/v9"
+	"github.com/jnovack/flag"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
@@ -116,52 +114,58 @@ func main() {
 		log.Info().Str("index", *index).Msg("Index created")
 	}
 
-	// Load data
-	data, err := os.ReadFile(*dataFile)
-	checkErr("reading data file", err)
+	// Stream data: first pass to count total objects
+	f, err := os.Open(*dataFile)
+	checkErr("opening data file", err)
+	defer f.Close()
 
-	var records []map[string]interface{}
-	err = json.Unmarshal(data, &records)
-	checkErr("parsing data JSON", err)
+	dec := json.NewDecoder(f)
+	tok, err := dec.Token()
+	if err != nil || tok != json.Delim('[') {
+		log.Fatal().Msg("Data file must be a JSON array")
+	}
 
-	total := len(records)
+	total := 0
+	for dec.More() {
+		var tmp map[string]interface{}
+		if err := dec.Decode(&tmp); err != nil {
+			log.Fatal().Err(err).Msg("Error counting objects in data file")
+		}
+		total++
+	}
+
 	log.Info().Int("total", total).Msg("Starting bulk insert")
 
+	// Second pass: stream and batch insert
+	f.Seek(0, 0)
+	dec = json.NewDecoder(f)
+	_, err = dec.Token() // skip [
+	if err != nil {
+		log.Fatal().Err(err).Msg("Error re-reading data file")
+	}
+
 	overallStart := time.Now()
-	for i := 0; i < total; i += *batchSize {
-		end := i + *batchSize
-		if end > total {
-			end = total
+	batch := make([]map[string]interface{}, 0, *batchSize)
+	inserted := 0
+	for dec.More() {
+		var doc map[string]interface{}
+		if err := dec.Decode(&doc); err != nil {
+			log.Fatal().Err(err).Msg("Error decoding object in data file")
 		}
-
-		var buf bytes.Buffer
-		for _, doc := range records[i:end] {
-			meta := map[string]map[string]string{"index": {"_index": *index}}
-			metaLine, _ := json.Marshal(meta)
-			docLine, _ := json.Marshal(doc)
-
-			buf.Write(metaLine)
-			buf.WriteByte('\n')
-			buf.Write(docLine)
-			buf.WriteByte('\n')
+		batch = append(batch, doc)
+		if len(batch) == *batchSize {
+			bulkInsert(es, *index, batch, inserted+len(batch), total)
+			inserted += len(batch)
+			batch = batch[:0]
 		}
-
-		startTime := time.Now()
-		res, err := es.Bulk(bytes.NewReader(buf.Bytes()), es.Bulk.WithContext(context.Background()))
-		duration := time.Since(startTime)
-
-		checkErr("bulk insert", err)
-		res.Body.Close()
-
-		log.Info().
-			Int("inserted", end).
-			Int("total", total).
-			Float64("batch_time_s", duration.Seconds()).
-			Msg("Batch inserted")
+	}
+	if len(batch) > 0 {
+		bulkInsert(es, *index, batch, inserted+len(batch), total)
 	}
 
 	overallDuration := time.Since(overallStart)
 	log.Info().Float64("total_time_s", overallDuration.Seconds()).Msg("Bulk load completed")
+
 }
 
 func checkErr(context string, err error) {
@@ -216,4 +220,28 @@ func buildCreateIndexBody(settingsFile, mappingsFile string) string {
 	}
 
 	return fmt.Sprintf(`{"settings": %s, "mappings": %s}`, settings, mappings)
+}
+
+// bulkInsert handles a batch of documents and logs progress
+func bulkInsert(es *elasticsearch.Client, index string, batch []map[string]interface{}, inserted, total int) {
+	var buf strings.Builder
+	for _, doc := range batch {
+		meta := map[string]map[string]string{"index": {"_index": index}}
+		metaLine, _ := json.Marshal(meta)
+		docLine, _ := json.Marshal(doc)
+		buf.Write(metaLine)
+		buf.WriteByte('\n')
+		buf.Write(docLine)
+		buf.WriteByte('\n')
+	}
+	startTime := time.Now()
+	res, err := es.Bulk(strings.NewReader(buf.String()), es.Bulk.WithContext(context.Background()))
+	duration := time.Since(startTime)
+	checkErr("bulk insert", err)
+	res.Body.Close()
+	log.Info().
+		Int("inserted", inserted).
+		Int("total", total).
+		Float64("batch_time_s", duration.Seconds()).
+		Msg("Batch inserted")
 }
