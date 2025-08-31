@@ -40,19 +40,19 @@ jobs:
           echo "Building for ${{ matrix.goos }}/${{ matrix.goarch }}"
           mkdir -p dist
           VERSION=${{ steps.vars.outputs.version }}
-          BIN_NAME="myapp-${VERSION}-${{ matrix.goos }}-${{ matrix.goarch }}"
+          BIN_NAME="${{ vars.GOLANG_APPLICATION }}-${VERSION}-${{ matrix.goos }}-${{ matrix.goarch }}"
           if [ "${{ matrix.goos }}" = "windows" ]; then
             BIN_NAME="${BIN_NAME}.exe"
           fi
           GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} \
             go build -ldflags="-s -w -X main.version=${VERSION}" \
-            -o "dist/${BIN_NAME}" ./cmd/myapp
+            -o "dist/${BIN_NAME}" ./cmd/${{ vars.GOLANG_APPLICATION }}
 
       - name: Package archive
         run: |
           cd dist
           VERSION=${{ steps.vars.outputs.version }}
-          BASE="myapp-${VERSION}-${{ matrix.goos }}-${{ matrix.goarch }}"
+          BASE="${{ vars.GOLANG_APPLICATION }}-${VERSION}-${{ matrix.goos }}-${{ matrix.goarch }}"
           if [ "${{ matrix.goos }}" = "windows" ]; then
             zip "${BASE}.zip" "${BASE}.exe"
             rm "${BASE}.exe"
@@ -64,7 +64,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: myapp-${{ matrix.goos }}-${{ matrix.goarch }}
+          name: ${{ vars.GOLANG_APPLICATION }}-${{ matrix.goos }}-${{ matrix.goarch }}
           path: dist/*
 
   release:
