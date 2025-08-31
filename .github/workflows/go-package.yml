@@ -77,11 +77,6 @@ jobs:
         with:
           path: dist
 
-      - name: Generate checksums
-        run: |
-          cd dist
-          sha256sum * > SHA256SUMS.txt
-
       - name: Generate release notes
         id: notes
         run: |
