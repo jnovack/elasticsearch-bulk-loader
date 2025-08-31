@@ -27,6 +27,7 @@ func main() {
 	batchSize := flag.Int("batch", 1000, "Batch size for bulk inserts")
 	deleteIndex := flag.Bool("delete", false, "Delete index if it exists")
 	addToIndex := flag.Bool("add", false, "Add documents to existing index without modifying it")
+	idField := flag.String("id", "", "Field to use to override _id (not normal)")
 	user := flag.String("user", "", "Username for basic auth (optional)")
 	pass := flag.String("pass", "", "Password for basic auth (optional)")
 	apiKey := flag.String("apiKey", "", "Elasticsearch API key (optional)")
@@ -154,13 +155,13 @@ func main() {
 		}
 		batch = append(batch, doc)
 		if len(batch) == *batchSize {
-			bulkInsert(es, *index, batch, inserted+len(batch), total)
+			bulkInsert(es, *index, batch, inserted+len(batch), total, *idField)
 			inserted += len(batch)
 			batch = batch[:0]
 		}
 	}
 	if len(batch) > 0 {
-		bulkInsert(es, *index, batch, inserted+len(batch), total)
+		bulkInsert(es, *index, batch, inserted+len(batch), total, *idField)
 	}
 
 	overallDuration := time.Since(overallStart)
@@ -222,11 +223,20 @@ func buildCreateIndexBody(settingsFile, mappingsFile string) string {
 	return fmt.Sprintf(`{"settings": %s, "mappings": %s}`, settings, mappings)
 }
 
-// bulkInsert handles a batch of documents and logs progress
-func bulkInsert(es *elasticsearch.Client, index string, batch []map[string]interface{}, inserted, total int) {
+// bulkInsert handles a batch of documents and logs progres, idFields
+func bulkInsert(es *elasticsearch.Client, index string, batch []map[string]interface{}, inserted, total int, idField string) {
 	var buf strings.Builder
 	for _, doc := range batch {
 		meta := map[string]map[string]string{"index": {"_index": index}}
+
+		if idField != "" {
+			if v, ok := doc[idField]; ok {
+				if idStr, ok := v.(string); ok && idStr != "" {
+					meta["index"]["_id"] = idStr
+				}
+			}
+		}
+
 		metaLine, _ := json.Marshal(meta)
 		docLine, _ := json.Marshal(doc)
 		buf.Write(metaLine)
