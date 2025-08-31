@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	elasticsearch "github.com/elastic/go-elasticsearch/v9"
+	"github.com/elastic/go-elasticsearch/v9"
 	"github.com/jnovack/flag"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
