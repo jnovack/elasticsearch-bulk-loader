@@ -52,18 +52,22 @@ go run cmd/es-bulk-loader/main.go \
 Settings can be loaded from a configuration file (e.g. `-config es-bulk-loader.conf`), the environment,
 or from the command-line.
 
-| Flag                 | Description                                                                 |
-|----------------------|-----------------------------------------------------------------------------|
-| `-config`            | Path to configuration file with settings                                    |
-| `-url`               | Elasticsearch URL (e.g., `http://localhost:9200`)                           |
-| `-insecureSkipVerify`| Skip TLS verification for HTTPS                                             |
-| `-index`             | Target Elasticsearch index name (**required**)                              |
-| `-data`              | Path to JSON array of documents to load (**required**)                      |
-| `-settings`          | Optional path to JSON file with index settings                              |
-| `-mappings`          | Optional path to JSON file with index mappings                              |
-| `-batch`             | Number of documents per bulk insert (default: 1000)                         |
-| `-add`               | Append to an existing index or create it if it doesn’t exist                |
-| `-delete`            | Delete the index if it exists before recreating it                          |
+| Flag                 | Description                                                                  |
+|----------------------|------------------------------------------------------------------------------|
+| `-config`            | Path to configuration file with settings                                     |
+| `-url`               | Elasticsearch URL (e.g., `http://localhost:9200`)                            |
+| `-insecureSkipVerify`| Skip TLS verification for HTTPS                                              |
+| `-index`             | Target Elasticsearch index name (**required**)                               |
+| `-data`              | Path to JSON array of documents to load (**required**)                       |
+| `-settings`          | Optional path to JSON file with index settings                               |
+| `-mappings`          | Optional path to JSON file with index mappings                               |
+| `-batch`             | Number of documents per bulk insert (default: 1000)                          |
+| `-add`               | Append to an existing index or create it if it doesn’t exist                 |
+| `-delete`            | Delete the index if it exists before recreating it (default: false)          |
+| `-id`                | Field to use in the document to override _id (default: not set)              |
+| `-user` / `-pass`    | Username and password for Basic Auth                                         |
+| `-apiKey`            | Elasticsearch API key                                                        |
+| `-version`           | Print version and exit                                                       |
 
 ## Behavior Summary
 
