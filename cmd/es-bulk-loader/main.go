@@ -16,6 +16,8 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+var version = "dev" // default if not overridden
+
 func main() {
 	// CLI flags
 	url := flag.String("url", "http://localhost:9200", "Elasticsearch URL")
@@ -31,14 +33,22 @@ func main() {
 	user := flag.String("user", "", "Username for basic auth (optional)")
 	pass := flag.String("pass", "", "Password for basic auth (optional)")
 	apiKey := flag.String("apiKey", "", "Elasticsearch API key (optional)")
+	showVersion := flag.Bool("version", false, "print version and exit")
 
 	flag.String(flag.DefaultConfigFlagname, "", "path to config file")
 
 	flag.Parse()
 
+	if *showVersion {
+		fmt.Println(version)
+		os.Exit(0)
+	}
+
 	// Init logger
 	zerolog.TimeFieldFormat = time.RFC3339
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
+
+	log.Info().Str("version", version).Msg("jnovack/es-bulk-loader starting...")
 
 	if (*user != "" || *pass != "") && *apiKey != "" {
 		log.Info().Msg("Cannot use both basic auth and API key. Choose one method.")
