@@ -28,7 +28,8 @@ func main() {
 	dataFile := flag.String("data", "", "Path to bulk JSON data file (array of objects)")
 	batchSize := flag.Int("batch", 1000, "Batch size for bulk inserts")
 	deleteIndex := flag.Bool("delete", false, "Delete index if it exists")
-	addToIndex := flag.Bool("add", false, "Add documents to existing index without modifying it")
+	addToIndex := flag.Bool("add", false, "Add documents to existing index")
+	flushIndex := flag.Bool("flush", false, "Delete all documents from an existing index without deleting the index")
 	idField := flag.String("id", "", "Field to use to override _id (not normal)")
 	user := flag.String("user", "", "Username for basic auth (optional)")
 	pass := flag.String("pass", "", "Password for basic auth (optional)")
@@ -90,24 +91,34 @@ func main() {
 
 	if exists {
 		switch {
-		case *addToIndex && *deleteIndex:
-			log.Info().Str("index", *index).Msg("Deleting and recreating index before adding documents")
-			deleteAndCheck(es, *index)
-			exists = false
 		case *deleteIndex:
-			log.Info().Str("index", *index).Msg("Deleting index")
+			if *addToIndex {
+				log.Info().Str("index", *index).Msg("Deleting and recreating index before adding documents")
+			} else {
+				log.Info().Str("index", *index).Msg("Deleting index")
+			}
 			deleteAndCheck(es, *index)
 			exists = false
+		case *flushIndex:
+			if *addToIndex {
+				log.Info().Str("index", *index).Msg("Flushing existing index before adding documents")
+			} else {
+				log.Info().Str("index", *index).Msg("Flushing existing index")
+			}
+			flushAndCheck(es, *index)
 		case *addToIndex:
 			log.Info().Str("index", *index).Msg("Appending documents to existing index")
 		default:
 			log.Fatal().
 				Str("index", *index).
-				Msg("Index exists. Use -delete to recreate or -add to append.")
+				Msg("Index exists. Use -delete to recreate, -flush to clear documents, or -add to append.")
 		}
 	} else {
 		if *deleteIndex {
 			log.Warn().Str("index", *index).Msg("Index does not exist. Nothing to delete.")
+		}
+		if *flushIndex {
+			log.Warn().Str("index", *index).Msg("Index does not exist. Nothing to flush.")
 		}
 		if *addToIndex {
 			log.Info().Str("index", *index).Msg("Creating index to append documents")
@@ -207,6 +218,22 @@ func deleteAndCheck(es *elasticsearch.Client, index string) {
 
 	if res.IsError() {
 		log.Fatal().Str("index", index).Msg("Failed to delete index")
+	}
+}
+
+func flushAndCheck(es *elasticsearch.Client, index string) {
+	query := `{"query":{"match_all":{}}}`
+	res, err := es.DeleteByQuery(
+		[]string{index},
+		strings.NewReader(query),
+		es.DeleteByQuery.WithConflicts("proceed"),
+		es.DeleteByQuery.WithRefresh(true),
+	)
+	checkErr("flushing index", err)
+	defer res.Body.Close()
+
+	if res.IsError() {
+		log.Fatal().Str("index", index).Msg("Failed to flush index")
 	}
 }
 

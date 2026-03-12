@@ -64,6 +64,7 @@ or from the command-line.
 | `-batch`             | Number of documents per bulk insert (default: 1000)                          |
 | `-add`               | Append to an existing index or create it if it doesn’t exist                 |
 | `-delete`            | Delete the index if it exists before recreating it (default: false)          |
+| `-flush`             | Delete all documents from an existing index without deleting the index        |
 | `-id`                | Field to use in the document to override _id (default: not set)              |
 | `-user` / `-pass`    | Username and password for Basic Auth                                         |
 | `-apiKey`            | Elasticsearch API key                                                        |
@@ -75,11 +76,15 @@ or from the command-line.
 |--------------|-----------------|----------------------------------------------------------------------|
 | ❌ No         | none or `-add`  | ✅ Create index (with optional settings/mappings), load data         |
 | ❌ No         | `-delete`       | ✅ Warn (nothing to delete), create index, load data                 |
+| ❌ No         | `-flush`        | ✅ Warn (nothing to flush), create index, load data                  |
 | ❌ No         | `-add -delete`  | ✅ Create index, load data                                           |
+| ❌ No         | `-add -flush`   | ✅ Create index, load data                                           |
 | ✅ Yes        | `-add`          | ✅ Append data to existing index                                     |
+| ✅ Yes        | `-flush`        | ✅ Delete all documents, keep index settings/mappings/pipelines, load data |
 | ✅ Yes        | `-delete`       | ✅ Delete and recreate index, load data                              |
 | ✅ Yes        | `-add -delete`  | ✅ Delete and recreate index, load data                              |
-| ✅ Yes        | none            | ❌ **Fail** — requires explicit `-add` or `-delete` to continue      |
+| ✅ Yes        | `-add -flush`   | ✅ Flush existing docs, then load data                               |
+| ✅ Yes        | none            | ❌ **Fail** — requires explicit `-add`, `-flush`, or `-delete` to continue |
 
 ## JSON Formats
 
