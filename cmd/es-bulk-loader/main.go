@@ -203,12 +203,14 @@ func indexExists(es *elasticsearch.Client, index string) (bool, error) {
 	}
 	defer res.Body.Close()
 
-	if res.StatusCode == 200 {
+	switch res.StatusCode {
+	case 200:
 		return true, nil
-	} else if res.StatusCode == 404 {
+	case 404:
 		return false, nil
+	default:
+		return false, fmt.Errorf("unexpected status code %d", res.StatusCode)
 	}
-	return false, fmt.Errorf("unexpected status code %d", res.StatusCode)
 }
 
 func deleteAndCheck(es *elasticsearch.Client, index string) {
