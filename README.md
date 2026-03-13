@@ -127,7 +127,7 @@ delete=true
 
 ## 🛡 Requirements
 
-- Go 1.18+
+- Go 1.25+
 - Elasticsearch 7.x, 8.x, or 9.x (tested with v9 client)
 
 ## 👥 License
