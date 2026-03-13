@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"strings"
@@ -17,6 +18,28 @@ import (
 )
 
 var version = "dev" // default if not overridden
+
+type bulkResponse struct {
+	Errors bool                           `json:"errors"`
+	Items  []map[string]bulkItemResponse  `json:"items"`
+}
+
+type bulkItemResponse struct {
+	Index  string          `json:"_index"`
+	ID     string          `json:"_id"`
+	Status int             `json:"status"`
+	Error  *bulkItemError  `json:"error,omitempty"`
+}
+
+type bulkItemError struct {
+	Type   string `json:"type"`
+	Reason string `json:"reason"`
+}
+
+type bulkInsertResult struct {
+	Succeeded int
+	Failed    int
+}
 
 func main() {
 	// CLI flags
@@ -168,7 +191,9 @@ func main() {
 
 	overallStart := time.Now()
 	batch := make([]map[string]interface{}, 0, *batchSize)
-	inserted := 0
+	processed := 0
+	succeededTotal := 0
+	failedTotal := 0
 	for dec.More() {
 		var doc map[string]interface{}
 		if err := dec.Decode(&doc); err != nil {
@@ -176,17 +201,35 @@ func main() {
 		}
 		batch = append(batch, doc)
 		if len(batch) == *batchSize {
-			bulkInsert(es, *index, batch, inserted+len(batch), total, *idField)
-			inserted += len(batch)
+			result := bulkInsert(es, *index, batch, processed+len(batch), total, *idField)
+			processed += len(batch)
+			succeededTotal += result.Succeeded
+			failedTotal += result.Failed
 			batch = batch[:0]
 		}
 	}
 	if len(batch) > 0 {
-		bulkInsert(es, *index, batch, inserted+len(batch), total, *idField)
+		result := bulkInsert(es, *index, batch, processed+len(batch), total, *idField)
+		processed += len(batch)
+		succeededTotal += result.Succeeded
+		failedTotal += result.Failed
 	}
 
 	overallDuration := time.Since(overallStart)
-	log.Info().Float64("total_time_s", overallDuration.Seconds()).Msg("Bulk load completed")
+	log.Info().
+		Int("processed", processed).
+		Int("succeeded", succeededTotal).
+		Int("failed", failedTotal).
+		Float64("total_time", overallDuration.Seconds()).
+		Msg("Bulk load completed")
+
+	if failedTotal > 0 {
+		log.Warn().
+			Int("failed", failedTotal).
+			Msg("Bulk load completed with failed items")
+
+		 // TODO: document and implement retry strategy for retryable bulk item failures (e.g. 429/503), plus dead-letter handling for non-retryable items
+	}
 
 }
 
@@ -262,8 +305,8 @@ func buildCreateIndexBody(settingsFile, mappingsFile string) string {
 	return fmt.Sprintf(`{"settings": %s, "mappings": %s}`, settings, mappings)
 }
 
-// bulkInsert handles a batch of documents and logs progres, idFields
-func bulkInsert(es *elasticsearch.Client, index string, batch []map[string]interface{}, inserted, total int, idField string) {
+// bulkInsert handles a batch of documents and validates per-item bulk response status.
+func bulkInsert(es *elasticsearch.Client, index string, batch []map[string]interface{}, inserted, total int, idField string) bulkInsertResult {
 	var buf strings.Builder
 	for _, doc := range batch {
 		meta := map[string]map[string]string{"index": {"_index": index}}
@@ -287,10 +330,67 @@ func bulkInsert(es *elasticsearch.Client, index string, batch []map[string]inter
 	res, err := es.Bulk(strings.NewReader(buf.String()), es.Bulk.WithContext(context.Background()))
 	duration := time.Since(startTime)
 	checkErr("bulk insert", err)
-	res.Body.Close()
+	defer res.Body.Close()
+
+	if res.IsError() {
+		body, _ := io.ReadAll(res.Body)
+		log.Fatal().
+			Int("status_code", res.StatusCode).
+			Str("body", string(body)).
+			Msg("Bulk API request failed")
+	}
+
+	var parsed bulkResponse
+	if err := json.NewDecoder(res.Body).Decode(&parsed); err != nil {
+		log.Fatal().Err(err).Msg("Unable to parse bulk response body")
+	}
+
+	failed := 0
+	logged := 0
+	for itemIdx, item := range parsed.Items {
+		for action, result := range item {
+			if result.Status >= 300 || result.Error != nil {
+				failed++
+				if logged < 10 {
+					errorType := ""
+					errorReason := ""
+					if result.Error != nil {
+						errorType = result.Error.Type
+						errorReason = result.Error.Reason
+					}
+					log.Error().
+						Int("item", itemIdx).
+						Str("action", action).
+						Str("_index", result.Index).
+						Str("_id", result.ID).
+						Int("status", result.Status).
+						Str("error_type", errorType).
+						Str("error_reason", errorReason).
+						Msg("Bulk item failed")
+					logged++
+				}
+			}
+		}
+	}
+
+	if failed > 0 && failed > logged {
+		log.Error().
+			Int("failed_items", failed).
+			Int("logged_failures", logged).
+			Msg("Additional bulk item failures omitted from logs")
+	}
+
+	succeeded := len(batch) - failed
 	log.Info().
 		Int("inserted", inserted).
 		Int("total", total).
-		Float64("batch_time_s", duration.Seconds()).
-		Msg("Batch inserted")
+		Int("batch_size", len(batch)).
+		Int("succeeded", succeeded).
+		Int("failed", failed).
+		Float64("time_taken", duration.Seconds()).
+		Msg("Batch processed")
+
+	// TODO: Add targeted retries for retryable statuses (429/503) with exponential backoff.
+	// TODO: Persist non-retryable item failures to a dead-letter file for later replay.
+	return bulkInsertResult{Succeeded: succeeded, Failed: failed}
 }
