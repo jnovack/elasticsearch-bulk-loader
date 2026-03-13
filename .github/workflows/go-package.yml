@@ -87,10 +87,11 @@ jobs:
           git fetch --tags
           PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
           if [ -n "$PREV_TAG" ]; then
-            git log --pretty=format:'- %s' ${PREV_TAG}..HEAD >> $GITHUB_OUTPUT
+            git log --pretty=format:'- %s' ${PREV_TAG}..HEAD^ >> $GITHUB_OUTPUT
           else
             git log --pretty=format:'- %s' >> $GITHUB_OUTPUT
           fi
+          echo >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release
