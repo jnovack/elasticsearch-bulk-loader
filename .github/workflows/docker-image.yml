@@ -4,7 +4,7 @@ name: Build Docker Image
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
   workflow_dispatch:
 
 jobs:
@@ -25,7 +25,7 @@ jobs:
           echo "RELEASE_DATE=$(date --rfc-3339=seconds | sed 's/ /T/g')" >> ${GITHUB_ENV}
 
       - name: Check out the repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Log in to Docker Hub
         uses: docker/login-action@f4ef78c080cd8ba55a85445d5b36e214a81df20a
@@ -62,11 +62,11 @@ jobs:
           push: true
           platforms: linux/amd64,linux/arm64
           build-args: |
-              "APPLICATION=${{ vars.DOCKER_APPLICATION || github.event.repository.name }}"
-              "BUILD_RFC3339=${{ env.RELEASE_DATE }}"
-              DESCRIPTION="${{ github.event.repository.description }}"
-              "PACKAGE=${{ github.repository }}"
-              "REVISION=${{ github.sha }}"
-              "VERSION=${{ github.ref_name }}"
+            "APPLICATION=${{ vars.DOCKER_APPLICATION || github.event.repository.name }}"
+            "BUILD_RFC3339=${{ env.RELEASE_DATE }}"
+            DESCRIPTION="${{ github.event.repository.description }}"
+            "PACKAGE=${{ github.repository }}"
+            "REVISION=${{ github.sha }}"
+            "VERSION=${{ github.ref_name }}"
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
