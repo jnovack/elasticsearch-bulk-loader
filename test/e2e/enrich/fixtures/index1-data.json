@@ -1,0 +1,14 @@
+[
+  {
+    "lookup_id": "A1",
+    "base_value": 7,
+    "multiplier": 3,
+    "source_name": "alpha"
+  },
+  {
+    "lookup_id": "B2",
+    "base_value": 5,
+    "multiplier": 4,
+    "source_name": "beta"
+  }
+]

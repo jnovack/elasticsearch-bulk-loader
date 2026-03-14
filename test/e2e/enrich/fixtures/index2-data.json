@@ -1,0 +1,10 @@
+[
+  {
+    "lookup_id": "A1",
+    "target_name": "first"
+  },
+  {
+    "lookup_id": "B2",
+    "target_name": "second"
+  }
+]
