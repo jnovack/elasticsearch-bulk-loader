@@ -66,6 +66,7 @@ or from the command-line.
 | `-delete`            | Delete the index if it exists before recreating it (default: false)          |
 | `-flush`             | Delete all documents from an existing index without deleting the index        |
 | `-id`                | Field to use in the document to override _id (default: not set)              |
+| `-enrich`            | Run enrich policies after the bulk insert; omit value for all or pass a comma-separated list |
 | `-user` / `-pass`    | Username and password for Basic Auth                                         |
 | `-apiKey`            | Elasticsearch API key                                                        |
 | `-version`           | Print version and exit                                                       |
@@ -87,6 +88,30 @@ or from the command-line.
 | ✅ Yes        | none            | ❌ **Fail** — requires explicit `-add`, `-flush`, or `-delete` to continue |
 
 ## JSON Formats
+
+## Enrich Policies
+
+Use `-enrich` after a bulk load when enrich policy backing indices need to be rebuilt.
+
+```bash
+go run cmd/es-bulk-loader/main.go \
+  -url https://localhost:9200 \
+  -index my-index \
+  -data data.json \
+  -enrich
+```
+
+Run only specific policies:
+
+```bash
+go run cmd/es-bulk-loader/main.go \
+  -url https://localhost:9200 \
+  -index my-index \
+  -data data.json \
+  -enrich=policy-a,policy-b
+```
+
+Unknown policy names are logged as warnings and skipped.
 
 ### `data.json`
 
