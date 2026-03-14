@@ -1,0 +1,16 @@
+{
+  "e2e-index2-enrich": {
+    "description": "Enrich target documents from the source index enrich policy",
+    "processors": [
+      {
+        "enrich": {
+          "policy_name": "e2e-source-policy",
+          "field": "lookup_id",
+          "target_field": "source_enrich",
+          "max_matches": 1,
+          "ignore_missing": false
+        }
+      }
+    ]
+  }
+}

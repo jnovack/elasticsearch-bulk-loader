@@ -1,0 +1,15 @@
+{
+  "mappings": {
+    "properties": {
+      "lookup_id": { "type": "keyword" },
+      "target_name": { "type": "keyword" },
+      "source_enrich": {
+        "properties": {
+          "calculated_value": { "type": "integer" },
+          "source_name": { "type": "keyword" },
+          "source_label": { "type": "keyword" }
+        }
+      }
+    }
+  }
+}

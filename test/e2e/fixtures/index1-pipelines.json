@@ -1,0 +1,13 @@
+{
+  "e2e-index1-calc": {
+    "description": "Calculate derived fields for source documents before indexing",
+    "processors": [
+      {
+        "script": {
+          "lang": "painless",
+          "source": "ctx.calculated_value = ctx.base_value * ctx.multiplier; ctx.source_label = ctx.source_name + '-' + ctx.calculated_value;"
+        }
+      }
+    ]
+  }
+}
