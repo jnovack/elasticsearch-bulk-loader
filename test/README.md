@@ -11,13 +11,13 @@ This fixture spins up Elasticsearch 9 and uses the `es-bulk-loader` container it
 ## Run
 
 ```bash
-./test/e2e/run.sh
+./test/run.sh
 ```
 
 Set `KEEP_ENV=1` to leave Elasticsearch running for inspection after the test:
 
 ```bash
-KEEP_ENV=1 ./test/e2e/run.sh
+KEEP_ENV=1 ./test/run.sh
 ```
 
 `run.sh` uses `ES_URL` for host-side health checks and verification, and `LOADER_ES_URL` for the `es-bulk-loader` container's internal connection to Elasticsearch. The defaults are `http://127.0.0.1:9200` and `http://elasticsearch:9200`.

@@ -16,7 +16,7 @@ services:
 
   es-bulk-loader:
     build:
-      context: ../../..
+      context: ../
       dockerfile: build/package/Dockerfile
       args:
         APPLICATION: es-bulk-loader

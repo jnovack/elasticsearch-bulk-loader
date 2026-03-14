@@ -159,11 +159,11 @@ Definition file formats are documented in [docs/PIPELINES.md](docs/PIPELINES.md)
 url=http://localhost:9200
 insecureSkipVerify=true
 index=e2e-source-index
-settings=test/e2e/fixtures/index1-settings.json
-mappings=test/e2e/fixtures/index1-mappings.json
-pipelines=test/e2e/fixtures/index1-pipelines.json
-policies=test/e2e/fixtures/index1-policies.json
-data=test/e2e/fixtures/index1-data.json
+settings=test/fixtures/index1-settings.json
+mappings=test/fixtures/index1-mappings.json
+pipelines=test/fixtures/index1-pipelines.json
+policies=test/fixtures/index1-policies.json
+data=test/fixtures/index1-data.json
 delete=true
 ```
 

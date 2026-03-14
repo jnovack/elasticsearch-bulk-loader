@@ -35,7 +35,7 @@ Use a top-level JSON object where each key is the policy name and each value is 
 
 The E2E fixture keeps source-index enrich policies in:
 
-- [index1-policies.json](../test/e2e/fixtures/index1-policies.json)
+- [index1-policies.json](../test/fixtures/index1-policies.json)
 
 The setup script iterates over the keys and issues one `PUT /_enrich/policy/<name>` request for each definition.
 

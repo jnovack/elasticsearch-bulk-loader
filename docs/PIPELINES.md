@@ -37,8 +37,8 @@ Use a top-level JSON object where each key is the pipeline name and each value i
 
 The E2E fixture keeps pipeline definitions per index:
 
-- [index1-pipelines.json](../test/e2e/fixtures/index1-pipelines.json)
-- [index2-pipelines.json](../test/e2e/fixtures/index2-pipelines.json)
+- [index1-pipelines.json](../test/fixtures/index1-pipelines.json)
+- [index2-pipelines.json](../test/fixtures/index2-pipelines.json)
 
 The setup scripts iterate over the keys and issue one `PUT /_ingest/pipeline/<name>` request for each definition.
 
