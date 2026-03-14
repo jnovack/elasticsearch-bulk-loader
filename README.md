@@ -1,20 +1,27 @@
-# Elasticsearch Bulk Loader (Go)
+# es-bulk-loader
 
-A fast and flexible Go CLI application for bulk loading JSON data into an Elasticsearch cluster.
+A Go CLI for end-to-end loading of JSON documents into Elasticsearch-compatible clusters.
 
-It supports loading index settings, mappings, and data from external JSON files with full control over index lifecycle (create, add to, or delete/recreate).
+`es-bulk-loader` is not just a thin bulk-insert wrapper. It can manage index creation, settings, mappings, ingest pipelines, enrich policies, document loading, and optional enrich execution as one repeatable CLI or CI workflow.
 
-## 📦 Features
+## Features
 
-- Support for Basic Auth and API Keys
-- Supports optional (and smart) settings and mappings management for index creation
+- Create a new index or work against an existing one with `-add`, `-delete`, and `-flush`
+- Load index settings and mappings from JSON files during index creation
+- Create or update one or more ingest pipelines from a keyed JSON definition file
+- Create or update one or more enrich policies from a keyed JSON definition file
+- Bulk load JSON array documents with configurable batch sizes
+- Run all enrich policies or only a selected comma-separated subset with `-enrich`
+- Refresh the source index before enrich execution so enrich backing indices are built from visible documents
+- Support Basic Auth or API key authentication
+- Ship with Docker-based end-to-end coverage for pipelines, painless processing, and enrich flow
 
-## 🚀 Quick Start
+## Quick Start
 
-### 🔧 Build
+### Build
 
 ```bash
-go build -o es-loader main.go
+go build -o es-bulk-loader ./cmd/es-bulk-loader
 ```
 
 ### Run Example
@@ -28,24 +35,32 @@ docker run --rm jnovack/es-bulk-loader:latest \
   -index my-index \
   -settings settings.json \
   -mappings mappings.json \
+  -pipelines pipelines.json \
+  -policies policies.json \
   -data data.json \
   -batch 500 \
-  -delete
+  -delete \
+  -enrich
 ```
 
-#### Do It Yourself
+#### Go
 
 ```bash
-go run cmd/es-bulk-loader/main.go \
+go run ./cmd/es-bulk-loader \
   -url https://localhost:9200 \
   -insecureSkipVerify=true \
   -index my-index \
   -settings settings.json \
   -mappings mappings.json \
+  -pipelines pipelines.json \
+  -policies policies.json \
   -data data.json \
   -batch 500 \
-  -delete
+  -delete \
+  -enrich
 ```
+
+Sample config file: [examples/es-bulk-loader.conf](examples/es-bulk-loader.conf)
 
 ## Command-Line Flags
 
@@ -68,8 +83,7 @@ or from the command-line.
 | `-delete`            | Delete the index if it exists before recreating it (default: false)          |
 | `-flush`             | Delete all documents from an existing index without deleting the index       |
 | `-id`                | Field to use in the document to override _id (default: not set)              |
-| `-enrich`            | Run enrich policies after the bulk insert                                    |
-|                      |   (omit value for all or pass a comma-separated list)                        |
+| `-enrich`            | Run enrich policies after the bulk insert; omit value for all or pass a comma-separated list |
 | `-user` / `-pass`    | Username and password for Basic Auth                                         |
 | `-apiKey`            | Elasticsearch API key                                                        |
 | `-version`           | Print version and exit                                                       |
@@ -89,8 +103,6 @@ or from the command-line.
 | ✅ Yes        | `-add -delete`  | ✅ Delete and recreate index, load data                                             |
 | ✅ Yes        | `-add -flush`   | ✅ Flush existing docs, then load data                                              |
 | ✅ Yes        | none            | ❌ **Fail** — requires explicit `-add`, `-flush`, or `-delete` to continue.         |
-
-## JSON Formats
 
 ## Enrich Policies
 
@@ -124,6 +136,8 @@ Unknown policy names are logged as warnings and skipped.
 
 Definition file formats are documented in [docs/PIPELINES.md](docs/PIPELINES.md) and [docs/POLICIES.md](docs/POLICIES.md).
 
+## JSON Formats
+
 ### `data.json`
 
 ```json
@@ -142,6 +156,17 @@ Definition file formats are documented in [docs/PIPELINES.md](docs/PIPELINES.md)
 }
 ```
 
+Wrapped settings are also accepted:
+
+```json
+{
+  "settings": {
+    "number_of_shards": 1,
+    "number_of_replicas": 1
+  }
+}
+```
+
 ### `mappings.json` (optional)
 
 ```json
@@ -149,6 +174,19 @@ Definition file formats are documented in [docs/PIPELINES.md](docs/PIPELINES.md)
   "properties": {
     "id":   { "type": "integer" },
     "name": { "type": "text" }
+  }
+}
+```
+
+Wrapped mappings are also accepted:
+
+```json
+{
+  "mappings": {
+    "properties": {
+      "id": { "type": "integer" },
+      "name": { "type": "text" }
+    }
   }
 }
 ```
@@ -165,13 +203,20 @@ pipelines=test/fixtures/index1-pipelines.json
 policies=test/fixtures/index1-policies.json
 data=test/fixtures/index1-data.json
 delete=true
+enrich=e2e-source-policy
 ```
 
 ## 🛡 Requirements
 
 - Go 1.25+
 - Elasticsearch 7.x, 8.x, or 9.x (tested with v9 client)
+- Opensearch (does not support enrich policies)
 
 ## 👥 License
 
-MIT License © 2025
+MIT License © 2025-2026
+
+## Disclaimer
+
+This project is an independent, open-source tool and is not affiliated with, endorsed by, or
+sponsored by Elastic. “Elasticsearch” and “Elastic” are trademarks of Elasticsearch B.V.
