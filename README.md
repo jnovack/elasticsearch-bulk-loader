@@ -61,33 +61,34 @@ or from the command-line.
 | `-data`              | Path to JSON array of documents to load (**required**)                       |
 | `-settings`          | Optional path to JSON file with index settings                               |
 | `-mappings`          | Optional path to JSON file with index mappings                               |
-| `-pipelines`         | Optional path to JSON file containing one or more ingest pipeline definitions |
-| `-policies`          | Optional path to JSON file containing one or more enrich policy definitions  |
+| `-pipelines`         | Optional path to JSON file with one or more ingest pipeline definitions      |
+| `-policies`          | Optional path to JSON file with one or more enrich policy definitions        |
 | `-batch`             | Number of documents per bulk insert (default: 1000)                          |
 | `-add`               | Append to an existing index or create it if it doesn’t exist                 |
 | `-delete`            | Delete the index if it exists before recreating it (default: false)          |
-| `-flush`             | Delete all documents from an existing index without deleting the index        |
+| `-flush`             | Delete all documents from an existing index without deleting the index       |
 | `-id`                | Field to use in the document to override _id (default: not set)              |
-| `-enrich`            | Run enrich policies after the bulk insert; omit value for all or pass a comma-separated list |
+| `-enrich`            | Run enrich policies after the bulk insert                                    |
+|                      |   (omit value for all or pass a comma-separated list)                        |
 | `-user` / `-pass`    | Username and password for Basic Auth                                         |
 | `-apiKey`            | Elasticsearch API key                                                        |
 | `-version`           | Print version and exit                                                       |
 
 ## Behavior Summary
 
-| Index Exists | Flags Set       | Action                                                               |
-|--------------|-----------------|----------------------------------------------------------------------|
-| ❌ No         | none or `-add`  | ✅ Create index (with optional settings/mappings), load data         |
-| ❌ No         | `-delete`       | ✅ Warn (nothing to delete), create index, load data                 |
-| ❌ No         | `-flush`        | ✅ Warn (nothing to flush), create index, load data                  |
-| ❌ No         | `-add -delete`  | ✅ Create index, load data                                           |
-| ❌ No         | `-add -flush`   | ✅ Create index, load data                                           |
-| ✅ Yes        | `-add`          | ✅ Append data to existing index                                     |
+| Index Exists  | Flags Set       | Action                                                                              |
+|---------------|-----------------|-------------------------------------------------------------------------------------|
+| ❌ No         | none or `-add`  | ✅ Create index (with optional settings/mappings), load data                        |
+| ❌ No         | `-delete`       | ✅ Warn (nothing to delete), create index, load data                                |
+| ❌ No         | `-flush`        | ✅ Warn (nothing to flush), create index, load data                                 |
+| ❌ No         | `-add -delete`  | ✅ Create index, load data                                                          |
+| ❌ No         | `-add -flush`   | ✅ Create index, load data                                                          |
+| ✅ Yes        | `-add`          | ✅ Append data to existing index                                                    |
 | ✅ Yes        | `-flush`        | ✅ Delete all documents, keep index settings/mappings/policies/pipelines, load data |
-| ✅ Yes        | `-delete`       | ✅ Delete and recreate index, load data                              |
-| ✅ Yes        | `-add -delete`  | ✅ Delete and recreate index, load data                              |
-| ✅ Yes        | `-add -flush`   | ✅ Flush existing docs, then load data                               |
-| ✅ Yes        | none            | ❌ **Fail** — requires explicit `-add`, `-flush`, or `-delete` to continue |
+| ✅ Yes        | `-delete`       | ✅ Delete and recreate index, load data                                             |
+| ✅ Yes        | `-add -delete`  | ✅ Delete and recreate index, load data                                             |
+| ✅ Yes        | `-add -flush`   | ✅ Flush existing docs, then load data                                              |
+| ✅ Yes        | none            | ❌ **Fail** — requires explicit `-add`, `-flush`, or `-delete` to continue.         |
 
 ## JSON Formats
 
