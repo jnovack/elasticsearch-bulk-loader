@@ -42,6 +42,8 @@ type bulkInsertResult struct {
 	Failed    int
 }
 
+type namedDefinitions map[string]json.RawMessage
+
 type enrichFlagValue struct {
 	enabled bool
 	all     bool
@@ -125,6 +127,8 @@ func main() {
 	index := flag.String("index", "", "Elasticsearch index name")
 	settingsFile := flag.String("settings", "", "Path to index settings JSON file (optional)")
 	mappingsFile := flag.String("mappings", "", "Path to index mappings JSON file (optional)")
+	pipelinesFile := flag.String("pipelines", "", "Path to JSON file containing one or more ingest pipeline definitions (optional)")
+	policiesFile := flag.String("policies", "", "Path to JSON file containing one or more enrich policy definitions (optional)")
 	dataFile := flag.String("data", "", "Path to bulk JSON data file (array of objects)")
 	batchSize := flag.Int("batch", 1000, "Batch size for bulk inserts")
 	deleteIndex := flag.Bool("delete", false, "Delete index if it exists")
@@ -187,13 +191,15 @@ func main() {
 	es, err := elasticsearch.NewClient(cfg)
 	checkErr("creating Elasticsearch client", err)
 
+	pipelineDefinitions, pipelineNames := readNamedDefinitions(*pipelinesFile, "pipeline")
+	policyDefinitions, policyNames := readNamedDefinitions(*policiesFile, "policy")
+
 	// Determine if index exists
 	exists, err := indexExists(es, *index)
 	checkErr("checking if index exists", err)
 
-	if exists {
-		switch {
-		case *deleteIndex:
+	if *deleteIndex {
+		if exists {
 			if *addToIndex {
 				log.Info().Str("index", *index).Msg("Deleting and recreating index before adding documents")
 			} else {
@@ -201,6 +207,15 @@ func main() {
 			}
 			deleteAndCheck(es, *index)
 			exists = false
+		} else {
+			log.Warn().Str("index", *index).Msg("Index does not exist. Nothing to delete.")
+		}
+
+		deleteManagedResources(es, pipelineDefinitions, pipelineNames, policyDefinitions, policyNames)
+	}
+
+	if exists {
+		switch {
 		case *flushIndex:
 			if *addToIndex {
 				log.Info().Str("index", *index).Msg("Flushing existing index before adding documents")
@@ -216,9 +231,6 @@ func main() {
 				Msg("Index exists. Use -delete to recreate, -flush to clear documents, or -add to append.")
 		}
 	} else {
-		if *deleteIndex {
-			log.Warn().Str("index", *index).Msg("Index does not exist. Nothing to delete.")
-		}
 		if *flushIndex {
 			log.Warn().Str("index", *index).Msg("Index does not exist. Nothing to flush.")
 		}
@@ -229,6 +241,10 @@ func main() {
 		}
 	}
 
+	if !exists {
+		createPipelines(es, pipelineDefinitions, pipelineNames)
+	}
+
 	// Create index if needed
 	if !exists {
 		body := buildCreateIndexBody(*settingsFile, *mappingsFile)
@@ -236,6 +252,14 @@ func main() {
 		checkErr("creating index", err)
 		defer res.Body.Close()
 		log.Info().Str("index", *index).Msg("Index created")
+	}
+
+	if !exists || !*flushIndex {
+		createPolicies(es, policyDefinitions, policyNames)
+	}
+
+	if exists && !*flushIndex {
+		createPipelines(es, pipelineDefinitions, pipelineNames)
 	}
 
 	// Stream data: first pass to count total objects
@@ -367,26 +391,169 @@ func flushAndCheck(es *elasticsearch.Client, index string) {
 }
 
 func buildCreateIndexBody(settingsFile, mappingsFile string) string {
-	settings := "{}"
-	mappings := "{}"
-
-	if settingsFile != "" {
-		if content, err := os.ReadFile(settingsFile); err == nil {
-			settings = string(content)
-		} else {
-			log.Fatal().Err(err).Msg("Reading settings file")
-		}
-	}
-
-	if mappingsFile != "" {
-		if content, err := os.ReadFile(mappingsFile); err == nil {
-			mappings = string(content)
-		} else {
-			log.Fatal().Err(err).Msg("Reading mappings file")
-		}
-	}
+	settings := normalizeIndexSection(settingsFile, "settings")
+	mappings := normalizeIndexSection(mappingsFile, "mappings")
 
 	return fmt.Sprintf(`{"settings": %s, "mappings": %s}`, settings, mappings)
+}
+
+func normalizeIndexSection(path, section string) string {
+	if path == "" {
+		return "{}"
+	}
+
+	content, err := os.ReadFile(path)
+	if err != nil {
+		log.Fatal().Err(err).Str("path", path).Msgf("Reading %s file", section)
+	}
+
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(content, &raw); err != nil {
+		log.Fatal().Err(err).Str("path", path).Msgf("Parsing %s file", section)
+	}
+
+	if nested, ok := raw[section]; ok {
+		return string(nested)
+	}
+
+	return string(content)
+}
+
+func readNamedDefinitions(path, resourceType string) (namedDefinitions, []string) {
+	if path == "" {
+		return nil, nil
+	}
+
+	content, err := os.ReadFile(path)
+	if err != nil {
+		log.Fatal().Err(err).Str("path", path).Msgf("Reading %s definitions file", resourceType)
+	}
+
+	var definitions namedDefinitions
+	if err := json.Unmarshal(content, &definitions); err != nil {
+		log.Fatal().Err(err).Str("path", path).Msgf("Parsing %s definitions file", resourceType)
+	}
+
+	names := make([]string, 0, len(definitions))
+	for name := range definitions {
+		names = append(names, name)
+	}
+	slices.Sort(names)
+
+	return definitions, names
+}
+
+func createPipelines(es *elasticsearch.Client, definitions namedDefinitions, names []string) {
+	for _, name := range names {
+		res, err := es.Ingest.PutPipeline(
+			name,
+			strings.NewReader(string(definitions[name])),
+			es.Ingest.PutPipeline.WithContext(context.Background()),
+		)
+		checkErr("creating pipeline", err)
+
+		if res.IsError() {
+			body, _ := io.ReadAll(res.Body)
+			res.Body.Close()
+			log.Fatal().
+				Str("pipeline", name).
+				Int("status_code", res.StatusCode).
+				Str("body", string(body)).
+				Msg("Failed to create pipeline")
+		}
+		res.Body.Close()
+
+		log.Info().Str("pipeline", name).Msg("Pipeline created or updated")
+	}
+}
+
+func deletePipelines(es *elasticsearch.Client, names []string) {
+	for _, name := range names {
+		res, err := es.Ingest.DeletePipeline(
+			name,
+			es.Ingest.DeletePipeline.WithContext(context.Background()),
+		)
+		checkErr("deleting pipeline", err)
+
+		if res.StatusCode == http.StatusNotFound {
+			res.Body.Close()
+			log.Info().Str("pipeline", name).Msg("Pipeline does not exist. Nothing to delete.")
+			continue
+		}
+		if res.IsError() {
+			body, _ := io.ReadAll(res.Body)
+			res.Body.Close()
+			log.Fatal().
+				Str("pipeline", name).
+				Int("status_code", res.StatusCode).
+				Str("body", string(body)).
+				Msg("Failed to delete pipeline")
+		}
+		res.Body.Close()
+
+		log.Info().Str("pipeline", name).Msg("Pipeline deleted")
+	}
+}
+
+func createPolicies(es *elasticsearch.Client, definitions namedDefinitions, names []string) {
+	for _, name := range names {
+		res, err := es.EnrichPutPolicy(
+			name,
+			strings.NewReader(string(definitions[name])),
+			es.EnrichPutPolicy.WithContext(context.Background()),
+		)
+		checkErr("creating enrich policy", err)
+
+		if res.IsError() {
+			body, _ := io.ReadAll(res.Body)
+			res.Body.Close()
+			log.Fatal().
+				Str("policy", name).
+				Int("status_code", res.StatusCode).
+				Str("body", string(body)).
+				Msg("Failed to create enrich policy")
+		}
+		res.Body.Close()
+
+		log.Info().Str("policy", name).Msg("Enrich policy created or updated")
+	}
+}
+
+func deletePolicies(es *elasticsearch.Client, names []string) {
+	for _, name := range names {
+		res, err := es.EnrichDeletePolicy(
+			name,
+			es.EnrichDeletePolicy.WithContext(context.Background()),
+		)
+		checkErr("deleting enrich policy", err)
+
+		if res.StatusCode == http.StatusNotFound {
+			res.Body.Close()
+			log.Info().Str("policy", name).Msg("Enrich policy does not exist. Nothing to delete.")
+			continue
+		}
+		if res.IsError() {
+			body, _ := io.ReadAll(res.Body)
+			res.Body.Close()
+			log.Fatal().
+				Str("policy", name).
+				Int("status_code", res.StatusCode).
+				Str("body", string(body)).
+				Msg("Failed to delete enrich policy")
+		}
+		res.Body.Close()
+
+		log.Info().Str("policy", name).Msg("Enrich policy deleted")
+	}
+}
+
+func deleteManagedResources(es *elasticsearch.Client, pipelineDefinitions namedDefinitions, pipelineNames []string, policyDefinitions namedDefinitions, policyNames []string) {
+	if len(pipelineDefinitions) > 0 {
+		deletePipelines(es, pipelineNames)
+	}
+	if len(policyDefinitions) > 0 {
+		deletePolicies(es, policyNames)
+	}
 }
 
 func refreshIndex(es *elasticsearch.Client, index string) {
@@ -409,7 +576,7 @@ func refreshIndex(es *elasticsearch.Client, index string) {
 func runEnrichPolicies(es *elasticsearch.Client, enrich *enrichFlagValue) {
 	availablePolicies := getEnrichPolicies(es)
 	if len(availablePolicies) == 0 {
-		log.Info().Msg("No enrich policies found; skipping enrich execution")
+		log.Warn().Msg("No enrich policies found; skipping enrich execution")
 		return
 	}
 

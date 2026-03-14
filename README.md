@@ -61,6 +61,8 @@ or from the command-line.
 | `-data`              | Path to JSON array of documents to load (**required**)                       |
 | `-settings`          | Optional path to JSON file with index settings                               |
 | `-mappings`          | Optional path to JSON file with index mappings                               |
+| `-pipelines`         | Optional path to JSON file containing one or more ingest pipeline definitions |
+| `-policies`          | Optional path to JSON file containing one or more enrich policy definitions  |
 | `-batch`             | Number of documents per bulk insert (default: 1000)                          |
 | `-add`               | Append to an existing index or create it if it doesn’t exist                 |
 | `-delete`            | Delete the index if it exists before recreating it (default: false)          |
@@ -81,7 +83,7 @@ or from the command-line.
 | ❌ No         | `-add -delete`  | ✅ Create index, load data                                           |
 | ❌ No         | `-add -flush`   | ✅ Create index, load data                                           |
 | ✅ Yes        | `-add`          | ✅ Append data to existing index                                     |
-| ✅ Yes        | `-flush`        | ✅ Delete all documents, keep index settings/mappings/pipelines, load data |
+| ✅ Yes        | `-flush`        | ✅ Delete all documents, keep index settings/mappings/policies/pipelines, load data |
 | ✅ Yes        | `-delete`       | ✅ Delete and recreate index, load data                              |
 | ✅ Yes        | `-add -delete`  | ✅ Delete and recreate index, load data                              |
 | ✅ Yes        | `-add -flush`   | ✅ Flush existing docs, then load data                               |
@@ -92,6 +94,12 @@ or from the command-line.
 ## Enrich Policies
 
 Use `-enrich` after a bulk load when enrich policy backing indices need to be rebuilt.
+
+When `-pipelines` and `-policies` are supplied, the loader imports those definitions as part of the run:
+
+- `-delete` removes the current index plus the declared pipelines and policies before rebuilding everything from scratch.
+- `-flush` deletes only documents from the current index and preserves existing settings, mappings, pipelines, and policies.
+- `-add` updates or creates declared pipelines and policies, then appends documents.
 
 ```bash
 go run cmd/es-bulk-loader/main.go \
@@ -112,6 +120,8 @@ go run cmd/es-bulk-loader/main.go \
 ```
 
 Unknown policy names are logged as warnings and skipped.
+
+Definition file formats are documented in [docs/PIPELINES.md](docs/PIPELINES.md) and [docs/POLICIES.md](docs/POLICIES.md).
 
 ### `data.json`
 
@@ -145,8 +155,14 @@ Unknown policy names are logged as warnings and skipped.
 ### `settings.conf` (optional)
 
 ```ini
-url=https://localhost:9200
+url=http://localhost:9200
 insecureSkipVerify=true
+index=e2e-source-index
+settings=test/e2e/fixtures/index1-settings.json
+mappings=test/e2e/fixtures/index1-mappings.json
+pipelines=test/e2e/fixtures/index1-pipelines.json
+policies=test/e2e/fixtures/index1-policies.json
+data=test/e2e/fixtures/index1-data.json
 delete=true
 ```
 
