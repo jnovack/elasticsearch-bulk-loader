@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -20,15 +21,15 @@ import (
 var version = "dev" // default if not overridden
 
 type bulkResponse struct {
-	Errors bool                           `json:"errors"`
-	Items  []map[string]bulkItemResponse  `json:"items"`
+	Errors bool                          `json:"errors"`
+	Items  []map[string]bulkItemResponse `json:"items"`
 }
 
 type bulkItemResponse struct {
-	Index  string          `json:"_index"`
-	ID     string          `json:"_id"`
-	Status int             `json:"status"`
-	Error  *bulkItemError  `json:"error,omitempty"`
+	Index  string         `json:"_index"`
+	ID     string         `json:"_id"`
+	Status int            `json:"status"`
+	Error  *bulkItemError `json:"error,omitempty"`
 }
 
 type bulkItemError struct {
@@ -39,6 +40,82 @@ type bulkItemError struct {
 type bulkInsertResult struct {
 	Succeeded int
 	Failed    int
+}
+
+type enrichFlagValue struct {
+	enabled bool
+	all     bool
+	raw     string
+}
+
+type enrichPolicySummary struct {
+	Config map[string]struct {
+		Name string `json:"name"`
+	} `json:"config"`
+}
+
+type enrichPoliciesResponse struct {
+	Policies []enrichPolicySummary `json:"policies"`
+}
+
+type enrichExecuteResponse struct {
+	Status *struct {
+		Phase string `json:"phase"`
+	} `json:"status,omitempty"`
+	Task *string `json:"task,omitempty"`
+}
+
+func (e *enrichFlagValue) String() string {
+	if e == nil {
+		return ""
+	}
+	if e.all {
+		return "all"
+	}
+	return e.raw
+}
+
+func (e *enrichFlagValue) Set(value string) error {
+	e.enabled = true
+	trimmed := strings.TrimSpace(value)
+	switch trimmed {
+	case "", "true":
+		e.all = true
+		e.raw = ""
+	case "false":
+		e.enabled = false
+		e.all = false
+		e.raw = ""
+	default:
+		e.all = false
+		e.raw = trimmed
+	}
+	return nil
+}
+
+func (e *enrichFlagValue) IsBoolFlag() bool {
+	return true
+}
+
+func (e *enrichFlagValue) explicitPolicies() []string {
+	if e == nil || !e.enabled || e.all {
+		return nil
+	}
+
+	policies := make([]string, 0)
+	seen := make(map[string]struct{})
+	for _, policy := range strings.Split(e.raw, ",") {
+		name := strings.TrimSpace(policy)
+		if name == "" {
+			continue
+		}
+		if _, ok := seen[name]; ok {
+			continue
+		}
+		seen[name] = struct{}{}
+		policies = append(policies, name)
+	}
+	return policies
 }
 
 func main() {
@@ -57,6 +134,8 @@ func main() {
 	user := flag.String("user", "", "Username for basic auth (optional)")
 	pass := flag.String("pass", "", "Password for basic auth (optional)")
 	apiKey := flag.String("apiKey", "", "Elasticsearch API key (optional)")
+	enrich := &enrichFlagValue{}
+	flag.Var(enrich, "enrich", "Run enrich policies after the bulk insert; provide a comma-separated policy list or omit the value to run all policies")
 	showVersion := flag.Bool("version", false, "print version and exit")
 
 	flag.String(flag.DefaultConfigFlagname, "", "path to config file")
@@ -228,7 +307,12 @@ func main() {
 			Int("failed", failedTotal).
 			Msg("Bulk load completed with failed items")
 
-		 // TODO: document and implement retry strategy for retryable bulk item failures (e.g. 429/503), plus dead-letter handling for non-retryable items
+		// TODO: document and implement retry strategy for retryable bulk item failures (e.g. 429/503), plus dead-letter handling for non-retryable items
+	}
+
+	if enrich.enabled {
+		refreshIndex(es, *index)
+		runEnrichPolicies(es, enrich)
 	}
 
 }
@@ -303,6 +387,186 @@ func buildCreateIndexBody(settingsFile, mappingsFile string) string {
 	}
 
 	return fmt.Sprintf(`{"settings": %s, "mappings": %s}`, settings, mappings)
+}
+
+func refreshIndex(es *elasticsearch.Client, index string) {
+	res, err := es.Indices.Refresh(es.Indices.Refresh.WithIndex(index))
+	checkErr("refreshing index before enrich execution", err)
+	defer res.Body.Close()
+
+	if res.IsError() {
+		body, _ := io.ReadAll(res.Body)
+		log.Fatal().
+			Str("index", index).
+			Int("status_code", res.StatusCode).
+			Str("body", string(body)).
+			Msg("Failed to refresh index before enrich execution")
+	}
+
+	log.Info().Str("index", index).Msg("Index refreshed before enrich execution")
+}
+
+func runEnrichPolicies(es *elasticsearch.Client, enrich *enrichFlagValue) {
+	availablePolicies := getEnrichPolicies(es)
+	if len(availablePolicies) == 0 {
+		log.Info().Msg("No enrich policies found; skipping enrich execution")
+		return
+	}
+
+	targets, missing := resolveEnrichTargets(enrich, availablePolicies)
+	for _, policy := range missing {
+		log.Warn().Str("policy", policy).Msg("Enrich policy not found; skipping")
+	}
+
+	if len(targets) == 0 {
+		log.Warn().Msg("No enrich policies matched the request")
+		return
+	}
+
+	log.Info().
+		Int("available", len(availablePolicies)).
+		Int("requested", len(targets)+len(missing)).
+		Int("selected", len(targets)).
+		Msg("Starting enrich policy execution")
+
+	succeeded := 0
+	failed := 0
+	for _, policy := range targets {
+		if executeEnrichPolicy(es, policy) {
+			succeeded++
+		} else {
+			failed++
+		}
+	}
+
+	event := log.Info()
+	if failed > 0 {
+		event = log.Error()
+	}
+	event.
+		Int("selected", len(targets)).
+		Int("succeeded", succeeded).
+		Int("failed", failed).
+		Int("missing", len(missing)).
+		Msg("Enrich policy execution completed")
+}
+
+func getEnrichPolicies(es *elasticsearch.Client) []string {
+	res, err := es.EnrichGetPolicy(es.EnrichGetPolicy.WithContext(context.Background()))
+	checkErr("getting enrich policies", err)
+	defer res.Body.Close()
+
+	if res.IsError() {
+		body, _ := io.ReadAll(res.Body)
+		log.Fatal().
+			Int("status_code", res.StatusCode).
+			Str("body", string(body)).
+			Msg("Failed to get enrich policies")
+	}
+
+	var parsed enrichPoliciesResponse
+	if err := json.NewDecoder(res.Body).Decode(&parsed); err != nil {
+		log.Fatal().Err(err).Msg("Unable to parse enrich policy response")
+	}
+
+	policies := make([]string, 0, len(parsed.Policies))
+	for _, policy := range parsed.Policies {
+		for _, config := range policy.Config {
+			if config.Name == "" {
+				continue
+			}
+			policies = append(policies, config.Name)
+		}
+	}
+	slices.Sort(policies)
+	return policies
+}
+
+func resolveEnrichTargets(enrich *enrichFlagValue, available []string) ([]string, []string) {
+	if enrich == nil || !enrich.enabled {
+		return nil, nil
+	}
+
+	availableSet := make(map[string]struct{}, len(available))
+	for _, policy := range available {
+		availableSet[policy] = struct{}{}
+	}
+
+	if enrich.all {
+		targets := append([]string(nil), available...)
+		slices.Sort(targets)
+		return targets, nil
+	}
+
+	targets := make([]string, 0)
+	missing := make([]string, 0)
+	for _, policy := range enrich.explicitPolicies() {
+		if _, ok := availableSet[policy]; ok {
+			targets = append(targets, policy)
+			continue
+		}
+		missing = append(missing, policy)
+	}
+	return targets, missing
+}
+
+func executeEnrichPolicy(es *elasticsearch.Client, policy string) bool {
+	startTime := time.Now()
+	res, err := es.EnrichExecutePolicy(
+		policy,
+		es.EnrichExecutePolicy.WithContext(context.Background()),
+		es.EnrichExecutePolicy.WithWaitForCompletion(true),
+	)
+	if err != nil {
+		log.Error().Err(err).Str("policy", policy).Msg("Failed to execute enrich policy")
+		return false
+	}
+	defer res.Body.Close()
+
+	if res.IsError() {
+		body, _ := io.ReadAll(res.Body)
+		log.Error().
+			Str("policy", policy).
+			Int("status_code", res.StatusCode).
+			Str("body", string(body)).
+			Float64("time_taken", time.Since(startTime).Seconds()).
+			Msg("Enrich policy execution failed")
+		return false
+	}
+
+	var parsed enrichExecuteResponse
+	if err := json.NewDecoder(res.Body).Decode(&parsed); err != nil {
+		log.Error().Err(err).Str("policy", policy).Msg("Unable to parse enrich policy execution response")
+		return false
+	}
+
+	isFailure := false
+	event := log.Info()
+	phase := ""
+	if parsed.Status != nil {
+		phase = parsed.Status.Phase
+		if strings.EqualFold(phase, "FAILED") || strings.EqualFold(phase, "CANCELLED") {
+			isFailure = true
+			event = log.Error()
+		}
+	}
+
+	entry := event.
+		Str("policy", policy).
+		Float64("time_taken", time.Since(startTime).Seconds())
+	if phase != "" {
+		entry = entry.Str("phase", phase)
+	}
+	if parsed.Task != nil && *parsed.Task != "" {
+		entry = entry.Str("task", *parsed.Task)
+	}
+
+	message := "Enrich policy execution succeeded"
+	if isFailure {
+		message = "Enrich policy execution failed"
+	}
+	entry.Msg(message)
+	return !isFailure
 }
 
 // bulkInsert handles a batch of documents and validates per-item bulk response status.
