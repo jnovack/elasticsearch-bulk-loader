@@ -1,7 +1,4 @@
 {
-  "settings": {
-    "index.default_pipeline": "e2e-index1-calc"
-  },
   "mappings": {
     "properties": {
       "lookup_id": { "type": "keyword" },

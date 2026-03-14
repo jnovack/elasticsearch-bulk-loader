@@ -62,7 +62,8 @@ curl -fsS -X DELETE "${ES_URL}/_enrich/policy/e2e-source-policy" >/dev/null || t
 
 echo "Creating source calculation pipeline and index"
 curl_json PUT "/_ingest/pipeline/e2e-index1-calc" "${FIXTURES_DIR}/index1-pipeline.json"
-curl_json PUT "/e2e-source-index" "${FIXTURES_DIR}/index1-create.json"
+curl_json PUT "/e2e-source-index" "${FIXTURES_DIR}/index1-settings.json"
+curl_json PUT "/e2e-source-index" "${FIXTURES_DIR}/index1-mappings.json"
 wait_for_index "e2e-source-index"
 
 echo "Creating enrich policy"
