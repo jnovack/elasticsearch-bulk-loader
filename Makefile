@@ -15,6 +15,8 @@ DOCKER_ORGANIZATION ?= $(word 1,$(subst /, ,$(PACKAGE)))
 DOCKER_REPOSITORY ?= $(word 2,$(subst /, ,$(PACKAGE)))
 IMAGE ?= $(if $(and $(DOCKER_ORGANIZATION),$(DOCKER_REPOSITORY)),$(DOCKER_ORGANIZATION)/$(DOCKER_REPOSITORY):$(VERSION),$(APPLICATION):$(VERSION))
 
+URL ?= http://localhost:9200
+
 .PHONY: help docker-build print-vars
 
 help:
@@ -43,3 +45,35 @@ docker-build:
 		--build-arg VERSION=$(VERSION) \
 		--tag $(IMAGE) \
 		.
+
+	docker tag $(IMAGE) $(APPLICATION):dev
+
+example:
+	docker run --rm \
+		-v ./examples/slugs:/data:ro es-bulk-loader:dev \
+		-url ${URL} \
+		-insecureSkipVerify=true \
+		-index slugs \
+		-settings /data/settings.json \
+		-mappings /data/mappings.json \
+		-pipelines /data/pipelines.json \
+		-policies /data/policies.json \
+		-data /data/slugs.json \
+		-id sanitized \
+		-delete \
+		-enrich
+
+testing:
+	docker run --rm -v \
+	./test/fixtures:/data:ro es-bulk-loader:dev \
+	-url ${URL} \
+	-insecureSkipVerify=true \
+	-index index1 \
+	-settings /data/index1-settings.json \
+	-mappings /data/index1-mappings.json \
+	-pipelines /data/index1-pipelines.json \
+	-policies /data/index1-policies.json \
+	-data /data/index1-data.json \
+	-id lookup_id \
+	-delete \
+	-enrich
