@@ -1,7 +1,7 @@
 {
   "e2e-source-policy": {
     "match": {
-      "indices": "e2e-source-index",
+      "indices": "${INDEX}",
       "match_field": "lookup_id",
       "enrich_fields": [
         "calculated_value",

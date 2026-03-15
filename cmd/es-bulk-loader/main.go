@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -43,6 +44,8 @@ type bulkInsertResult struct {
 }
 
 type namedDefinitions map[string]json.RawMessage
+
+type templateVariables map[string]string
 
 type enrichFlagValue struct {
 	enabled bool
@@ -191,8 +194,9 @@ func main() {
 	es, err := elasticsearch.NewClient(cfg)
 	checkErr("creating Elasticsearch client", err)
 
-	pipelineDefinitions, pipelineNames := readNamedDefinitions(*pipelinesFile, "pipeline")
-	policyDefinitions, policyNames := readNamedDefinitions(*policiesFile, "policy")
+	variables := buildTemplateVariables(*index)
+	pipelineDefinitions, pipelineNames := readNamedDefinitions(*pipelinesFile, "pipeline", variables)
+	policyDefinitions, policyNames := readNamedDefinitions(*policiesFile, "policy", variables)
 
 	// Determine if index exists
 	exists, err := indexExists(es, *index)
@@ -247,7 +251,7 @@ func main() {
 
 	// Create index if needed
 	if !exists {
-		body := buildCreateIndexBody(*settingsFile, *mappingsFile)
+		body := buildCreateIndexBody(*settingsFile, *mappingsFile, variables)
 		res, err := es.Indices.Create(*index, es.Indices.Create.WithBody(strings.NewReader(body)))
 		checkErr("creating index", err)
 		defer res.Body.Close()
@@ -390,19 +394,19 @@ func flushAndCheck(es *elasticsearch.Client, index string) {
 	}
 }
 
-func buildCreateIndexBody(settingsFile, mappingsFile string) string {
-	settings := normalizeIndexSection(settingsFile, "settings")
-	mappings := normalizeIndexSection(mappingsFile, "mappings")
+func buildCreateIndexBody(settingsFile, mappingsFile string, variables templateVariables) string {
+	settings := normalizeIndexSection(settingsFile, "settings", variables)
+	mappings := normalizeIndexSection(mappingsFile, "mappings", variables)
 
 	return fmt.Sprintf(`{"settings": %s, "mappings": %s}`, settings, mappings)
 }
 
-func normalizeIndexSection(path, section string) string {
+func normalizeIndexSection(path, section string, variables templateVariables) string {
 	if path == "" {
 		return "{}"
 	}
 
-	content, err := os.ReadFile(path)
+	content, err := readTemplatedFile(path, variables)
 	if err != nil {
 		log.Fatal().Err(err).Str("path", path).Msgf("Reading %s file", section)
 	}
@@ -419,12 +423,12 @@ func normalizeIndexSection(path, section string) string {
 	return string(content)
 }
 
-func readNamedDefinitions(path, resourceType string) (namedDefinitions, []string) {
+func readNamedDefinitions(path, resourceType string, variables templateVariables) (namedDefinitions, []string) {
 	if path == "" {
 		return nil, nil
 	}
 
-	content, err := os.ReadFile(path)
+	content, err := readTemplatedFile(path, variables)
 	if err != nil {
 		log.Fatal().Err(err).Str("path", path).Msgf("Reading %s definitions file", resourceType)
 	}
@@ -441,6 +445,37 @@ func readNamedDefinitions(path, resourceType string) (namedDefinitions, []string
 	slices.Sort(names)
 
 	return definitions, names
+}
+
+func buildTemplateVariables(index string) templateVariables {
+	return templateVariables{
+		"INDEX": index,
+	}
+}
+
+var templateVariablePattern = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)`)
+
+func readTemplatedFile(path string, variables templateVariables) ([]byte, error) {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+
+	expanded := templateVariablePattern.ReplaceAllStringFunc(string(content), func(match string) string {
+		name := strings.TrimPrefix(match, "$")
+		name = strings.TrimPrefix(name, "{")
+		name = strings.TrimSuffix(name, "}")
+
+		if value, ok := variables[name]; ok {
+			return value
+		}
+		if value, ok := os.LookupEnv(name); ok {
+			return value
+		}
+		return match
+	})
+
+	return []byte(expanded), nil
 }
 
 func createPipelines(es *elasticsearch.Client, definitions namedDefinitions, names []string) {

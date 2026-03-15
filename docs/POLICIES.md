@@ -43,4 +43,5 @@ The setup script iterates over the keys and issues one `PUT /_enrich/policy/<nam
 
 - Consolidation is local-file organization only. Elasticsearch still requires one API call per policy.
 - Policy bodies must match the Elasticsearch enrich policy request format.
+- `${INDEX}` is expanded by `es-bulk-loader` to the current `-index` value before the policy file is parsed.
 - A created policy still needs to be executed before its enrich backing index exists.
