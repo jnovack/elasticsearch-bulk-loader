@@ -93,9 +93,9 @@ or from the command-line.
 | `-pipelines`         | Optional path to JSON file with one or more ingest pipeline definitions      |
 | `-policies`          | Optional path to JSON file with one or more enrich policy definitions        |
 | `-batch`             | Number of documents per bulk insert (default: 1000)                          |
-| `-add`               | Append to an existing index or create it if it doesn’t exist                 |
+| `-add`               | Append to an existing index or create it if it doesn’t exist; with `-flush`, also update declared pipelines and policies |
 | `-delete`            | Delete the index if it exists before recreating it (default: false)          |
-| `-flush`             | Delete all documents from an existing index without deleting the index       |
+| `-flush`             | Delete all documents from an existing index without deleting the index; with `-add`, also update declared pipelines and policies |
 | `-id`                | Field to use in the document to override _id (default: not set)              |
 | `-enrich`            | Run enrich policies after the bulk insert; omit value for all or pass a comma-separated list |
 | `-user` / `-pass`    | Username and password for Basic Auth                                         |
@@ -112,10 +112,10 @@ or from the command-line.
 | ❌ No         | `-add -delete`  | ✅ Create index, load data                                                          |
 | ❌ No         | `-add -flush`   | ✅ Create index, load data                                                          |
 | ✅ Yes        | `-add`          | ✅ Append data to existing index                                                    |
-| ✅ Yes        | `-flush`        | ✅ Delete all documents, keep index settings/mappings/policies/pipelines, load data |
+| ✅ Yes        | `-flush`        | ✅ Delete all documents, keep index settings/mappings/policies/pipelines unchanged, load data |
 | ✅ Yes        | `-delete`       | ✅ Delete and recreate index, load data                                             |
 | ✅ Yes        | `-add -delete`  | ✅ Delete and recreate index, load data                                             |
-| ✅ Yes        | `-add -flush`   | ✅ Flush existing docs, then load data                                              |
+| ✅ Yes        | `-add -flush`   | ✅ Flush existing docs, keep settings/mappings, update declared pipelines/policies, then load data |
 | ✅ Yes        | none            | ❌ **Fail** — requires explicit `-add`, `-flush`, or `-delete` to continue.         |
 
 ## Enrich Policies
@@ -125,7 +125,8 @@ Use `-enrich` after a bulk load when enrich policy backing indices need to be re
 When `-pipelines` and `-policies` are supplied, the loader imports those definitions as part of the run:
 
 - `-delete` removes the current index plus the declared pipelines and policies before rebuilding everything from scratch.
-- `-flush` deletes only documents from the current index and preserves existing settings, mappings, pipelines, and policies.
+- `-flush` deletes only documents from the current index and preserves existing settings, mappings, pipelines, and policies as-is.
+- `-flush -add` deletes only documents from the current index, preserves existing settings and mappings, and updates or creates the declared pipelines and policies before loading new data.
 - `-add` updates or creates declared pipelines and policies, then appends documents.
 
 ```bash

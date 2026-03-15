@@ -285,13 +285,15 @@ func main() {
 		log.Info().Str("index", *index).Msg("Created index")
 	}
 
-	if !exists || !*flushIndex {
+	if shouldApplyManagedResourceDefinitions(exists, *flushIndex, *addToIndex) {
 		createPolicies(es, policyDefinitions, policyNames)
 	}
 
-	if exists && !*flushIndex {
+	if exists && shouldApplyManagedResourceDefinitions(exists, *flushIndex, *addToIndex) {
 		createPipelines(es, pipelineDefinitions, pipelineNames)
 	}
+
+	log.Info().Msg("Starting bulk insert...")
 
 	// Stream data: first pass to count total objects
 	f, err := os.Open(*dataFile)
@@ -313,7 +315,7 @@ func main() {
 		total++
 	}
 
-	log.Info().Int("total", total).Msg("Starting bulk insert")
+	log.Debug().Int("total", total).Msg("Data file counted")
 
 	// Second pass: stream and batch insert
 	if _, err := f.Seek(0, 0); err != nil {
@@ -375,6 +377,7 @@ func main() {
 }
 
 func checkErr(context string, err error) {
+	log.Trace().Msg(context)
 	if err != nil {
 		log.Fatal().Err(err).Msgf("Error during %s", context)
 	}
@@ -751,6 +754,18 @@ func deleteManagedResources(es *elasticsearch.Client, pipelineNames []string, po
 	if len(policyNames) > 0 {
 		deletePolicies(es, policyNames)
 	}
+}
+
+func shouldApplyManagedResourceDefinitions(indexExists, flushIndex, addToIndex bool) bool {
+	if !indexExists {
+		return true
+	}
+
+	if flushIndex && !addToIndex {
+		return false
+	}
+
+	return true
 }
 
 func refreshIndex(es *elasticsearch.Client, index string) {

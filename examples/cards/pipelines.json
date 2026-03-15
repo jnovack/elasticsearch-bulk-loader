@@ -20,7 +20,7 @@
       {
         "script": {
           "lang": "painless",
-          "source": "if (ctx._slug_match != null) { if (!(ctx.slugs instanceof Map)) { ctx.slugs = [:]; } if (ctx._slug_match.sanitized != null) { ctx.slugs.name = ctx._slug_match.sanitized; } if (ctx._slug_match.inclusion != null) { ctx.slugs.inclusion = ctx._slug_match.inclusion; } if (ctx._slug_match.inclusion_percent != null) { ctx.slugs.inclusion_percent = ctx._slug_match.inclusion_percent; } if (ctx._slug_match.potential_decks != null) { ctx.slugs.potential_decks = ctx._slug_match.potential_decks; } } ctx.remove('_slug_lookup_name'); ctx.remove('_slug_match');"
+          "source": "if (ctx._slug_match != null) { if (!(ctx.slugs instanceof Map)) { ctx.slugs = [:]; } if (ctx._slug_match.sanitized != null) { ctx.slugs.sanitized = ctx._slug_match.sanitized; } if (ctx._slug_match.inclusion != null) { ctx.slugs.inclusion = ctx._slug_match.inclusion; } if (ctx._slug_match.inclusion_percent != null) { ctx.slugs.inclusion_percent = ctx._slug_match.inclusion_percent; } if (ctx._slug_match.potential_decks != null) { ctx.slugs.potential_decks = ctx._slug_match.potential_decks; } } ctx.remove('_slug_lookup_name'); ctx.remove('_slug_match');"
         }
       }
     ]

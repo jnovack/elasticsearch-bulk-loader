@@ -378,7 +378,7 @@
           "inclusion_percent": {
             "type": "float"
           },
-          "name": {
+          "sanitized": {
             "type": "keyword"
           },
           "potential_decks": {
