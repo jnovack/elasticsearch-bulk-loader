@@ -136,6 +136,8 @@ Unknown policy names are logged as warnings and skipped.
 
 Definition file formats are documented in [docs/PIPELINES.md](docs/PIPELINES.md) and [docs/POLICIES.md](docs/POLICIES.md).
 
+Definition files support variable expansion before they are parsed. `${INDEX}` is populated from the current `-index` value, and other placeholders fall back to environment variables when present.
+
 ## JSON Formats
 
 ### `data.json`
