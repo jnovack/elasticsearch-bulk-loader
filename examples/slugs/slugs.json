@@ -1,0 +1,2642 @@
+[
+  {
+    "name": "Sol Ring",
+    "sanitized": "sol-ring",
+    "sanitized_wo": "sol-ring",
+    "url": "/cards/sol-ring",
+    "inclusion": 5649927,
+    "label": "In 5649927 decks, 84% of 6719784 decks",
+    "num_decks": 5649927,
+    "potential_decks": 6719784
+  },
+  {
+    "name": "Swamp",
+    "sanitized": "swamp",
+    "sanitized_wo": "swamp",
+    "url": "/cards/swamp",
+    "inclusion": 3096947,
+    "label": "In 3096947 decks, 91% of 3395771 decks",
+    "num_decks": 3096947,
+    "potential_decks": 3395771
+  },
+  {
+    "name": "Mountain",
+    "sanitized": "mountain",
+    "sanitized_wo": "mountain",
+    "url": "/cards/mountain",
+    "inclusion": 3038609,
+    "label": "In 3038609 decks, 92% of 3313588 decks",
+    "num_decks": 3038609,
+    "potential_decks": 3313588
+  },
+  {
+    "name": "Island",
+    "sanitized": "island",
+    "sanitized_wo": "island",
+    "url": "/cards/island",
+    "inclusion": 3024140,
+    "label": "In 3024140 decks, 91% of 3310892 decks",
+    "num_decks": 3024140,
+    "potential_decks": 3310892
+  },
+  {
+    "name": "Forest",
+    "sanitized": "forest",
+    "sanitized_wo": "forest",
+    "url": "/cards/forest",
+    "inclusion": 2888320,
+    "label": "In 2888320 decks, 93% of 3114032 decks",
+    "num_decks": 2888320,
+    "potential_decks": 3114032
+  },
+  {
+    "name": "Plains",
+    "sanitized": "plains",
+    "sanitized_wo": "plains",
+    "url": "/cards/plains",
+    "inclusion": 2848416,
+    "label": "In 2848416 decks, 91% of 3114990 decks",
+    "num_decks": 2848416,
+    "potential_decks": 3114990
+  },
+  {
+    "name": "Swords to Plowshares",
+    "sanitized": "swords-to-plowshares",
+    "sanitized_wo": "swords-to-plowshares",
+    "url": "/cards/swords-to-plowshares",
+    "inclusion": 1932330,
+    "label": "In 1932330 decks, 62% of 3114990 decks",
+    "num_decks": 1932330,
+    "potential_decks": 3114990
+  },
+  {
+    "name": "Counterspell",
+    "sanitized": "counterspell",
+    "sanitized_wo": "counterspell",
+    "url": "/cards/counterspell",
+    "inclusion": 1395114,
+    "label": "In 1395114 decks, 42% of 3310892 decks",
+    "num_decks": 1395114,
+    "potential_decks": 3310892
+  },
+  {
+    "name": "Birds of Paradise",
+    "sanitized": "birds-of-paradise",
+    "sanitized_wo": "birds-of-paradise",
+    "url": "/cards/birds-of-paradise",
+    "inclusion": 857400,
+    "label": "In 857400 decks, 28% of 3114032 decks",
+    "num_decks": 857400,
+    "potential_decks": 3114032
+  },
+  {
+    "name": "Dark Ritual",
+    "sanitized": "dark-ritual",
+    "sanitized_wo": "dark-ritual",
+    "url": "/cards/dark-ritual",
+    "inclusion": 795243,
+    "label": "In 795243 decks, 23% of 3395771 decks",
+    "num_decks": 795243,
+    "potential_decks": 3395771
+  },
+  {
+    "name": "Demonic Tutor",
+    "sanitized": "demonic-tutor",
+    "sanitized_wo": "demonic-tutor",
+    "url": "/cards/demonic-tutor",
+    "inclusion": 691063,
+    "label": "In 691063 decks, 20% of 3395771 decks",
+    "num_decks": 691063,
+    "potential_decks": 3395771
+  },
+  {
+    "name": "Llanowar Elves",
+    "sanitized": "llanowar-elves",
+    "sanitized_wo": "llanowar-elves",
+    "url": "/cards/llanowar-elves",
+    "inclusion": 631521,
+    "label": "In 631521 decks, 20% of 3114032 decks",
+    "num_decks": 631521,
+    "potential_decks": 3114032
+  },
+  {
+    "name": "Mana Vault",
+    "sanitized": "mana-vault",
+    "sanitized_wo": "mana-vault",
+    "url": "/cards/mana-vault",
+    "inclusion": 407672,
+    "label": "In 407672 decks, 6% of 6719784 decks",
+    "num_decks": 407672,
+    "potential_decks": 6719784
+  },
+  {
+    "name": "Lightning Bolt",
+    "sanitized": "lightning-bolt",
+    "sanitized_wo": "lightning-bolt",
+    "url": "/cards/lightning-bolt",
+    "inclusion": 362643,
+    "label": "In 362643 decks, 11% of 3313588 decks",
+    "num_decks": 362643,
+    "potential_decks": 3313588
+  },
+  {
+    "name": "Wild Growth",
+    "sanitized": "wild-growth",
+    "sanitized_wo": "wild-growth",
+    "url": "/cards/wild-growth",
+    "inclusion": 328220,
+    "label": "In 328220 decks, 11% of 3114032 decks",
+    "num_decks": 328220,
+    "potential_decks": 3114032
+  },
+  {
+    "name": "Animate Dead",
+    "sanitized": "animate-dead",
+    "sanitized_wo": "animate-dead",
+    "url": "/cards/animate-dead",
+    "inclusion": 311664,
+    "label": "In 311664 decks, 9% of 3395771 decks",
+    "num_decks": 311664,
+    "potential_decks": 3395771
+  },
+  {
+    "name": "Underground Sea",
+    "sanitized": "underground-sea",
+    "sanitized_wo": "underground-sea",
+    "url": "/cards/underground-sea",
+    "inclusion": 240227,
+    "label": "In 240227 decks, 15% of 1653084 decks",
+    "num_decks": 240227,
+    "potential_decks": 1653084
+  },
+  {
+    "name": "Volcanic Island",
+    "sanitized": "volcanic-island",
+    "sanitized_wo": "volcanic-island",
+    "url": "/cards/volcanic-island",
+    "inclusion": 213352,
+    "label": "In 213352 decks, 14% of 1544423 decks",
+    "num_decks": 213352,
+    "potential_decks": 1544423
+  },
+  {
+    "name": "Tropical Island",
+    "sanitized": "tropical-island",
+    "sanitized_wo": "tropical-island",
+    "url": "/cards/tropical-island",
+    "inclusion": 213312,
+    "label": "In 213312 decks, 14% of 1501092 decks",
+    "num_decks": 213312,
+    "potential_decks": 1501092
+  },
+  {
+    "name": "Tundra",
+    "sanitized": "tundra",
+    "sanitized_wo": "tundra",
+    "url": "/cards/tundra",
+    "inclusion": 210052,
+    "label": "In 210052 decks, 14% of 1501637 decks",
+    "num_decks": 210052,
+    "potential_decks": 1501637
+  },
+  {
+    "name": "Scrubland",
+    "sanitized": "scrubland",
+    "sanitized_wo": "scrubland",
+    "url": "/cards/scrubland",
+    "inclusion": 207161,
+    "label": "In 207161 decks, 14% of 1517973 decks",
+    "num_decks": 207161,
+    "potential_decks": 1517973
+  },
+  {
+    "name": "Red Elemental Blast",
+    "sanitized": "red-elemental-blast",
+    "sanitized_wo": "red-elemental-blast",
+    "url": "/cards/red-elemental-blast",
+    "inclusion": 205133,
+    "label": "In 205133 decks, 6% of 3313588 decks",
+    "num_decks": 205133,
+    "potential_decks": 3313588
+  },
+  {
+    "name": "Badlands",
+    "sanitized": "badlands",
+    "sanitized_wo": "badlands",
+    "url": "/cards/badlands",
+    "inclusion": 201202,
+    "label": "In 201202 decks, 13% of 1517517 decks",
+    "num_decks": 201202,
+    "potential_decks": 1517517
+  },
+  {
+    "name": "Bayou",
+    "sanitized": "bayou",
+    "sanitized_wo": "bayou",
+    "url": "/cards/bayou",
+    "inclusion": 188363,
+    "label": "In 188363 decks, 13% of 1402405 decks",
+    "num_decks": 188363,
+    "potential_decks": 1402405
+  },
+  {
+    "name": "Taiga",
+    "sanitized": "taiga",
+    "sanitized_wo": "taiga",
+    "url": "/cards/taiga",
+    "inclusion": 186139,
+    "label": "In 186139 decks, 13% of 1453308 decks",
+    "num_decks": 186139,
+    "potential_decks": 1453308
+  },
+  {
+    "name": "Plateau",
+    "sanitized": "plateau",
+    "sanitized_wo": "plateau",
+    "url": "/cards/plateau",
+    "inclusion": 185115,
+    "label": "In 185115 decks, 12% of 1539113 decks",
+    "num_decks": 185115,
+    "potential_decks": 1539113
+  },
+  {
+    "name": "Savannah",
+    "sanitized": "savannah",
+    "sanitized_wo": "savannah",
+    "url": "/cards/savannah",
+    "inclusion": 182528,
+    "label": "In 182528 decks, 13% of 1427455 decks",
+    "num_decks": 182528,
+    "potential_decks": 1427455
+  },
+  {
+    "name": "Basalt Monolith",
+    "sanitized": "basalt-monolith",
+    "sanitized_wo": "basalt-monolith",
+    "url": "/cards/basalt-monolith",
+    "inclusion": 171366,
+    "label": "In 171366 decks, 3% of 6719784 decks",
+    "num_decks": 171366,
+    "potential_decks": 6719784
+  },
+  {
+    "name": "Wrath of God",
+    "sanitized": "wrath-of-god",
+    "sanitized_wo": "wrath-of-god",
+    "url": "/cards/wrath-of-god",
+    "inclusion": 169355,
+    "label": "In 169355 decks, 5% of 3114990 decks",
+    "num_decks": 169355,
+    "potential_decks": 3114990
+  },
+  {
+    "name": "Wheel of Fortune",
+    "sanitized": "wheel-of-fortune",
+    "sanitized_wo": "wheel-of-fortune",
+    "url": "/cards/wheel-of-fortune",
+    "inclusion": 159250,
+    "label": "In 159250 decks, 5% of 3313588 decks",
+    "num_decks": 159250,
+    "potential_decks": 3313588
+  },
+  {
+    "name": "Howling Mine",
+    "sanitized": "howling-mine",
+    "sanitized_wo": "howling-mine",
+    "url": "/cards/howling-mine",
+    "inclusion": 132332,
+    "label": "In 132332 decks, 2% of 6719784 decks",
+    "num_decks": 132332,
+    "potential_decks": 6719784
+  },
+  {
+    "name": "Fog",
+    "sanitized": "fog",
+    "sanitized_wo": "fog",
+    "url": "/cards/fog",
+    "inclusion": 111683,
+    "label": "In 111683 decks, 4% of 3114032 decks",
+    "num_decks": 111683,
+    "potential_decks": 3114032
+  },
+  {
+    "name": "Disenchant",
+    "sanitized": "disenchant",
+    "sanitized_wo": "disenchant",
+    "url": "/cards/disenchant",
+    "inclusion": 105286,
+    "label": "In 105286 decks, 3% of 3114990 decks",
+    "num_decks": 105286,
+    "potential_decks": 3114990
+  },
+  {
+    "name": "Regrowth",
+    "sanitized": "regrowth",
+    "sanitized_wo": "regrowth",
+    "url": "/cards/regrowth",
+    "inclusion": 89766,
+    "label": "In 89766 decks, 3% of 3114032 decks",
+    "num_decks": 89766,
+    "potential_decks": 3114032
+  },
+  {
+    "name": "Nevinyrral's Disk",
+    "sanitized": "nevinyrrals-disk",
+    "sanitized_wo": "nevinyrrals-disk",
+    "url": "/cards/nevinyrrals-disk",
+    "inclusion": 68724,
+    "label": "In 68724 decks, 1% of 6719784 decks",
+    "num_decks": 68724,
+    "potential_decks": 6719784
+  },
+  {
+    "name": "Verduran Enchantress",
+    "sanitized": "verduran-enchantress",
+    "sanitized_wo": "verduran-enchantress",
+    "url": "/cards/verduran-enchantress",
+    "inclusion": 60653,
+    "label": "In 60653 decks, 2% of 3114032 decks",
+    "num_decks": 60653,
+    "potential_decks": 3114032
+  },
+  {
+    "name": "Manabarbs",
+    "sanitized": "manabarbs",
+    "sanitized_wo": "manabarbs",
+    "url": "/cards/manabarbs",
+    "inclusion": 56888,
+    "label": "In 56888 decks, 2% of 3313588 decks",
+    "num_decks": 56888,
+    "potential_decks": 3313588
+  },
+  {
+    "name": "Royal Assassin",
+    "sanitized": "royal-assassin",
+    "sanitized_wo": "royal-assassin",
+    "url": "/cards/royal-assassin",
+    "inclusion": 53619,
+    "label": "In 53619 decks, 2% of 3395771 decks",
+    "num_decks": 53619,
+    "potential_decks": 3395771
+  },
+  {
+    "name": "Earthquake",
+    "sanitized": "earthquake",
+    "sanitized_wo": "earthquake",
+    "url": "/cards/earthquake",
+    "inclusion": 49357,
+    "label": "In 49357 decks, 1% of 3313588 decks",
+    "num_decks": 49357,
+    "potential_decks": 3313588
+  },
+  {
+    "name": "Winter Orb",
+    "sanitized": "winter-orb",
+    "sanitized_wo": "winter-orb",
+    "url": "/cards/winter-orb",
+    "inclusion": 39779,
+    "label": "In 39779 decks, 1% of 6719784 decks",
+    "num_decks": 39779,
+    "potential_decks": 6719784
+  },
+  {
+    "name": "Timetwister",
+    "sanitized": "timetwister",
+    "sanitized_wo": "timetwister",
+    "url": "/cards/timetwister",
+    "inclusion": 38844,
+    "label": "In 38844 decks, 1% of 3310892 decks",
+    "num_decks": 38844,
+    "potential_decks": 3310892
+  },
+  {
+    "name": "Meekstone",
+    "sanitized": "meekstone",
+    "sanitized_wo": "meekstone",
+    "url": "/cards/meekstone",
+    "inclusion": 38737,
+    "label": "In 38737 decks, 1% of 6719784 decks",
+    "num_decks": 38737,
+    "potential_decks": 6719784
+  },
+  {
+    "name": "Zombie Master",
+    "sanitized": "zombie-master",
+    "sanitized_wo": "zombie-master",
+    "url": "/cards/zombie-master",
+    "inclusion": 38643,
+    "label": "In 38643 decks, 1% of 3395771 decks",
+    "num_decks": 38643,
+    "potential_decks": 3395771
+  },
+  {
+    "name": "Unsummon",
+    "sanitized": "unsummon",
+    "sanitized_wo": "unsummon",
+    "url": "/cards/unsummon",
+    "inclusion": 36430,
+    "label": "In 36430 decks, 1% of 3310892 decks",
+    "num_decks": 36430,
+    "potential_decks": 3310892
+  },
+  {
+    "name": "Mana Flare",
+    "sanitized": "mana-flare",
+    "sanitized_wo": "mana-flare",
+    "url": "/cards/mana-flare",
+    "inclusion": 34436,
+    "label": "In 34436 decks, 1% of 3313588 decks",
+    "num_decks": 34436,
+    "potential_decks": 3313588
+  },
+  {
+    "name": "Sacrifice",
+    "sanitized": "sacrifice",
+    "sanitized_wo": "sacrifice",
+    "url": "/cards/sacrifice",
+    "inclusion": 33787,
+    "label": "In 33787 decks, 1% of 3395771 decks",
+    "num_decks": 33787,
+    "potential_decks": 3395771
+  },
+  {
+    "name": "Goblin King",
+    "sanitized": "goblin-king",
+    "sanitized_wo": "goblin-king",
+    "url": "/cards/goblin-king",
+    "inclusion": 33211,
+    "label": "In 33211 decks, 1% of 3313588 decks",
+    "num_decks": 33211,
+    "potential_decks": 3313588
+  },
+  {
+    "name": "Library of Leng",
+    "sanitized": "library-of-leng",
+    "sanitized_wo": "library-of-leng",
+    "url": "/cards/library-of-leng",
+    "inclusion": 31998,
+    "label": "In 31998 decks, 0% of 6719784 decks",
+    "num_decks": 31998,
+    "potential_decks": 6719784
+  },
+  {
+    "name": "Clone",
+    "sanitized": "clone",
+    "sanitized_wo": "clone",
+    "url": "/cards/clone",
+    "inclusion": 29437,
+    "label": "In 29437 decks, 1% of 3310892 decks",
+    "num_decks": 29437,
+    "potential_decks": 3310892
+  },
+  {
+    "name": "Pestilence",
+    "sanitized": "pestilence",
+    "sanitized_wo": "pestilence",
+    "url": "/cards/pestilence",
+    "inclusion": 28873,
+    "label": "In 28873 decks, 1% of 3395771 decks",
+    "num_decks": 28873,
+    "potential_decks": 3395771
+  },
+  {
+    "name": "Armageddon",
+    "sanitized": "armageddon",
+    "sanitized_wo": "armageddon",
+    "url": "/cards/armageddon",
+    "inclusion": 28866,
+    "label": "In 28866 decks, 1% of 3114990 decks",
+    "num_decks": 28866,
+    "potential_decks": 3114990
+  },
+  {
+    "name": "Berserk",
+    "sanitized": "berserk",
+    "sanitized_wo": "berserk",
+    "url": "/cards/berserk",
+    "inclusion": 28455,
+    "label": "In 28455 decks, 1% of 3114032 decks",
+    "num_decks": 28455,
+    "potential_decks": 3114032
+  },
+  {
+    "name": "Copy Artifact",
+    "sanitized": "copy-artifact",
+    "sanitized_wo": "copy-artifact",
+    "url": "/cards/copy-artifact",
+    "inclusion": 28249,
+    "label": "In 28249 decks, 1% of 3310892 decks",
+    "num_decks": 28249,
+    "potential_decks": 3310892
+  },
+  {
+    "name": "Giant Growth",
+    "sanitized": "giant-growth",
+    "sanitized_wo": "giant-growth",
+    "url": "/cards/giant-growth",
+    "inclusion": 27936,
+    "label": "In 27936 decks, 1% of 3114032 decks",
+    "num_decks": 27936,
+    "potential_decks": 3114032
+  },
+  {
+    "name": "Fireball",
+    "sanitized": "fireball",
+    "sanitized_wo": "fireball",
+    "url": "/cards/fireball",
+    "inclusion": 27066,
+    "label": "In 27066 decks, 1% of 3313588 decks",
+    "num_decks": 27066,
+    "potential_decks": 3313588
+  },
+  {
+    "name": "Instill Energy",
+    "sanitized": "instill-energy",
+    "sanitized_wo": "instill-energy",
+    "url": "/cards/instill-energy",
+    "inclusion": 23652,
+    "label": "In 23652 decks, 1% of 3114032 decks",
+    "num_decks": 23652,
+    "potential_decks": 3114032
+  },
+  {
+    "name": "Ankh of Mishra",
+    "sanitized": "ankh-of-mishra",
+    "sanitized_wo": "ankh-of-mishra",
+    "url": "/cards/ankh-of-mishra",
+    "inclusion": 21908,
+    "label": "In 21908 decks, 0% of 6719784 decks",
+    "num_decks": 21908,
+    "potential_decks": 6719784
+  },
+  {
+    "name": "Lord of Atlantis",
+    "sanitized": "lord-of-atlantis",
+    "sanitized_wo": "lord-of-atlantis",
+    "url": "/cards/lord-of-atlantis",
+    "inclusion": 21736,
+    "label": "In 21736 decks, 1% of 3310892 decks",
+    "num_decks": 21736,
+    "potential_decks": 3310892
+  },
+  {
+    "name": "Lure",
+    "sanitized": "lure",
+    "sanitized_wo": "lure",
+    "url": "/cards/lure",
+    "inclusion": 18217,
+    "label": "In 18217 decks, 1% of 3114032 decks",
+    "num_decks": 18217,
+    "potential_decks": 3114032
+  },
+  {
+    "name": "Control Magic",
+    "sanitized": "control-magic",
+    "sanitized_wo": "control-magic",
+    "url": "/cards/control-magic",
+    "inclusion": 15756,
+    "label": "In 15756 decks, 0% of 3310892 decks",
+    "num_decks": 15756,
+    "potential_decks": 3310892
+  },
+  {
+    "name": "Smoke",
+    "sanitized": "smoke",
+    "sanitized_wo": "smoke",
+    "url": "/cards/smoke",
+    "inclusion": 14794,
+    "label": "In 14794 decks, 0% of 3313588 decks",
+    "num_decks": 14794,
+    "potential_decks": 3313588
+  },
+  {
+    "name": "Bad Moon",
+    "sanitized": "bad-moon",
+    "sanitized_wo": "bad-moon",
+    "url": "/cards/bad-moon",
+    "inclusion": 14275,
+    "label": "In 14275 decks, 0% of 3395771 decks",
+    "num_decks": 14275,
+    "potential_decks": 3395771
+  },
+  {
+    "name": "Stasis",
+    "sanitized": "stasis",
+    "sanitized_wo": "stasis",
+    "url": "/cards/stasis",
+    "inclusion": 13494,
+    "label": "In 13494 decks, 0% of 3310892 decks",
+    "num_decks": 13494,
+    "potential_decks": 3310892
+  },
+  {
+    "name": "Fork",
+    "sanitized": "fork",
+    "sanitized_wo": "fork",
+    "url": "/cards/fork",
+    "inclusion": 13213,
+    "label": "In 13213 decks, 0% of 3313588 decks",
+    "num_decks": 13213,
+    "potential_decks": 3313588
+  },
+  {
+    "name": "Hypnotic Specter",
+    "sanitized": "hypnotic-specter",
+    "sanitized_wo": "hypnotic-specter",
+    "url": "/cards/hypnotic-specter",
+    "inclusion": 12051,
+    "label": "In 12051 decks, 0% of 3395771 decks",
+    "num_decks": 12051,
+    "potential_decks": 3395771
+  },
+  {
+    "name": "Twiddle",
+    "sanitized": "twiddle",
+    "sanitized_wo": "twiddle",
+    "url": "/cards/twiddle",
+    "inclusion": 12004,
+    "label": "In 12004 decks, 0% of 3310892 decks",
+    "num_decks": 12004,
+    "potential_decks": 3310892
+  },
+  {
+    "name": "Terror",
+    "sanitized": "terror",
+    "sanitized_wo": "terror",
+    "url": "/cards/terror",
+    "inclusion": 11775,
+    "label": "In 11775 decks, 0% of 3395771 decks",
+    "num_decks": 11775,
+    "potential_decks": 3395771
+  },
+  {
+    "name": "Grizzly Bears",
+    "sanitized": "grizzly-bears",
+    "sanitized_wo": "grizzly-bears",
+    "url": "/cards/grizzly-bears",
+    "inclusion": 11455,
+    "label": "In 11455 decks, 0% of 3114032 decks",
+    "num_decks": 11455,
+    "potential_decks": 3114032
+  },
+  {
+    "name": "Hurricane",
+    "sanitized": "hurricane",
+    "sanitized_wo": "hurricane",
+    "url": "/cards/hurricane",
+    "inclusion": 11102,
+    "label": "In 11102 decks, 0% of 3114032 decks",
+    "num_decks": 11102,
+    "potential_decks": 3114032
+  },
+  {
+    "name": "Icy Manipulator",
+    "sanitized": "icy-manipulator",
+    "sanitized_wo": "icy-manipulator",
+    "url": "/cards/icy-manipulator",
+    "inclusion": 9986,
+    "label": "In 9986 decks, 0% of 6719784 decks",
+    "num_decks": 9986,
+    "potential_decks": 6719784
+  },
+  {
+    "name": "Raise Dead",
+    "sanitized": "raise-dead",
+    "sanitized_wo": "raise-dead",
+    "url": "/cards/raise-dead",
+    "inclusion": 9271,
+    "label": "In 9271 decks, 0% of 3395771 decks",
+    "num_decks": 9271,
+    "potential_decks": 3395771
+  },
+  {
+    "name": "Serra Angel",
+    "sanitized": "serra-angel",
+    "sanitized_wo": "serra-angel",
+    "url": "/cards/serra-angel",
+    "inclusion": 8773,
+    "label": "In 8773 decks, 0% of 3114990 decks",
+    "num_decks": 8773,
+    "potential_decks": 3114990
+  },
+  {
+    "name": "Blue Elemental Blast",
+    "sanitized": "blue-elemental-blast",
+    "sanitized_wo": "blue-elemental-blast",
+    "url": "/cards/blue-elemental-blast",
+    "inclusion": 8058,
+    "label": "In 8058 decks, 0% of 3310892 decks",
+    "num_decks": 8058,
+    "potential_decks": 3310892
+  },
+  {
+    "name": "Island Sanctuary",
+    "sanitized": "island-sanctuary",
+    "sanitized_wo": "island-sanctuary",
+    "url": "/cards/island-sanctuary",
+    "inclusion": 7971,
+    "label": "In 7971 decks, 0% of 3114990 decks",
+    "num_decks": 7971,
+    "potential_decks": 3114990
+  },
+  {
+    "name": "Glasses of Urza",
+    "sanitized": "glasses-of-urza",
+    "sanitized_wo": "glasses-of-urza",
+    "url": "/cards/glasses-of-urza",
+    "inclusion": 7945,
+    "label": "In 7945 decks, 0% of 6719784 decks",
+    "num_decks": 7945,
+    "potential_decks": 6719784
+  },
+  {
+    "name": "Prodigal Sorcerer",
+    "sanitized": "prodigal-sorcerer",
+    "sanitized_wo": "prodigal-sorcerer",
+    "url": "/cards/prodigal-sorcerer",
+    "inclusion": 7521,
+    "label": "In 7521 decks, 0% of 3310892 decks",
+    "num_decks": 7521,
+    "potential_decks": 3310892
+  },
+  {
+    "name": "Power Sink",
+    "sanitized": "power-sink",
+    "sanitized_wo": "power-sink",
+    "url": "/cards/power-sink",
+    "inclusion": 7331,
+    "label": "In 7331 decks, 0% of 3310892 decks",
+    "num_decks": 7331,
+    "potential_decks": 3310892
+  },
+  {
+    "name": "Black Vise",
+    "sanitized": "black-vise",
+    "sanitized_wo": "black-vise",
+    "url": "/cards/black-vise",
+    "inclusion": 7190,
+    "label": "In 7190 decks, 0% of 6719784 decks",
+    "num_decks": 7190,
+    "potential_decks": 6719784
+  },
+  {
+    "name": "Shivan Dragon",
+    "sanitized": "shivan-dragon",
+    "sanitized_wo": "shivan-dragon",
+    "url": "/cards/shivan-dragon",
+    "inclusion": 7134,
+    "label": "In 7134 decks, 0% of 3313588 decks",
+    "num_decks": 7134,
+    "potential_decks": 3313588
+  },
+  {
+    "name": "Savannah Lions",
+    "sanitized": "savannah-lions",
+    "sanitized_wo": "savannah-lions",
+    "url": "/cards/savannah-lions",
+    "inclusion": 6668,
+    "label": "In 6668 decks, 0% of 3114990 decks",
+    "num_decks": 6668,
+    "potential_decks": 3114990
+  },
+  {
+    "name": "Power Surge",
+    "sanitized": "power-surge",
+    "sanitized_wo": "power-surge",
+    "url": "/cards/power-surge",
+    "inclusion": 6457,
+    "label": "In 6457 decks, 0% of 3313588 decks",
+    "num_decks": 6457,
+    "potential_decks": 3313588
+  },
+  {
+    "name": "Resurrection",
+    "sanitized": "resurrection",
+    "sanitized_wo": "resurrection",
+    "url": "/cards/resurrection",
+    "inclusion": 6144,
+    "label": "In 6144 decks, 0% of 3114990 decks",
+    "num_decks": 6144,
+    "potential_decks": 3114990
+  },
+  {
+    "name": "Braingeyser",
+    "sanitized": "braingeyser",
+    "sanitized_wo": "braingeyser",
+    "url": "/cards/braingeyser",
+    "inclusion": 6107,
+    "label": "In 6107 decks, 0% of 3310892 decks",
+    "num_decks": 6107,
+    "potential_decks": 3310892
+  },
+  {
+    "name": "Kormus Bell",
+    "sanitized": "kormus-bell",
+    "sanitized_wo": "kormus-bell",
+    "url": "/cards/kormus-bell",
+    "inclusion": 5813,
+    "label": "In 5813 decks, 0% of 6719784 decks",
+    "num_decks": 5813,
+    "potential_decks": 6719784
+  },
+  {
+    "name": "Mind Twist",
+    "sanitized": "mind-twist",
+    "sanitized_wo": "mind-twist",
+    "url": "/cards/mind-twist",
+    "inclusion": 5199,
+    "label": "In 5199 decks, 0% of 3395771 decks",
+    "num_decks": 5199,
+    "potential_decks": 3395771
+  },
+  {
+    "name": "Gauntlet of Might",
+    "sanitized": "gauntlet-of-might",
+    "sanitized_wo": "gauntlet-of-might",
+    "url": "/cards/gauntlet-of-might",
+    "inclusion": 5146,
+    "label": "In 5146 decks, 0% of 3313588 decks",
+    "num_decks": 5146,
+    "potential_decks": 3313588
+  },
+  {
+    "name": "Lord of the Pit",
+    "sanitized": "lord-of-the-pit",
+    "sanitized_wo": "lord-of-the-pit",
+    "url": "/cards/lord-of-the-pit",
+    "inclusion": 5097,
+    "label": "In 5097 decks, 0% of 3395771 decks",
+    "num_decks": 5097,
+    "potential_decks": 3395771
+  },
+  {
+    "name": "Ice Storm",
+    "sanitized": "ice-storm",
+    "sanitized_wo": "ice-storm",
+    "url": "/cards/ice-storm",
+    "inclusion": 5067,
+    "label": "In 5067 decks, 0% of 3114032 decks",
+    "num_decks": 5067,
+    "potential_decks": 3114032
+  },
+  {
+    "name": "Stone Rain",
+    "sanitized": "stone-rain",
+    "sanitized_wo": "stone-rain",
+    "url": "/cards/stone-rain",
+    "inclusion": 4904,
+    "label": "In 4904 decks, 0% of 3313588 decks",
+    "num_decks": 4904,
+    "potential_decks": 3313588
+  },
+  {
+    "name": "Nightmare",
+    "sanitized": "nightmare",
+    "sanitized_wo": "nightmare",
+    "url": "/cards/nightmare",
+    "inclusion": 4341,
+    "label": "In 4341 decks, 0% of 3395771 decks",
+    "num_decks": 4341,
+    "potential_decks": 3395771
+  },
+  {
+    "name": "Invisibility",
+    "sanitized": "invisibility",
+    "sanitized_wo": "invisibility",
+    "url": "/cards/invisibility",
+    "inclusion": 4328,
+    "label": "In 4328 decks, 0% of 3310892 decks",
+    "num_decks": 4328,
+    "potential_decks": 3310892
+  },
+  {
+    "name": "Shatter",
+    "sanitized": "shatter",
+    "sanitized_wo": "shatter",
+    "url": "/cards/shatter",
+    "inclusion": 4204,
+    "label": "In 4204 decks, 0% of 3313588 decks",
+    "num_decks": 4204,
+    "potential_decks": 3313588
+  },
+  {
+    "name": "Howl from Beyond",
+    "sanitized": "howl-from-beyond",
+    "sanitized_wo": "howl-from-beyond",
+    "url": "/cards/howl-from-beyond",
+    "inclusion": 3875,
+    "label": "In 3875 decks, 0% of 3395771 decks",
+    "num_decks": 3875,
+    "potential_decks": 3395771
+  },
+  {
+    "name": "Dingus Egg",
+    "sanitized": "dingus-egg",
+    "sanitized_wo": "dingus-egg",
+    "url": "/cards/dingus-egg",
+    "inclusion": 3543,
+    "label": "In 3543 decks, 0% of 6719784 decks",
+    "num_decks": 3543,
+    "potential_decks": 6719784
+  },
+  {
+    "name": "Drain Life",
+    "sanitized": "drain-life",
+    "sanitized_wo": "drain-life",
+    "url": "/cards/drain-life",
+    "inclusion": 3452,
+    "label": "In 3452 decks, 0% of 3395771 decks",
+    "num_decks": 3452,
+    "potential_decks": 3395771
+  },
+  {
+    "name": "Regeneration",
+    "sanitized": "regeneration",
+    "sanitized_wo": "regeneration",
+    "url": "/cards/regeneration",
+    "inclusion": 3215,
+    "label": "In 3215 decks, 0% of 3114032 decks",
+    "num_decks": 3215,
+    "potential_decks": 3114032
+  },
+  {
+    "name": "Copper Tablet",
+    "sanitized": "copper-tablet",
+    "sanitized_wo": "copper-tablet",
+    "url": "/cards/copper-tablet",
+    "inclusion": 3146,
+    "label": "In 3146 decks, 0% of 6719784 decks",
+    "num_decks": 3146,
+    "potential_decks": 6719784
+  },
+  {
+    "name": "Living Lands",
+    "sanitized": "living-lands",
+    "sanitized_wo": "living-lands",
+    "url": "/cards/living-lands",
+    "inclusion": 3088,
+    "label": "In 3088 decks, 0% of 3114032 decks",
+    "num_decks": 3088,
+    "potential_decks": 3114032
+  },
+  {
+    "name": "Wall of Ice",
+    "sanitized": "wall-of-ice",
+    "sanitized_wo": "wall-of-ice",
+    "url": "/cards/wall-of-ice",
+    "inclusion": 3070,
+    "label": "In 3070 decks, 0% of 3114032 decks",
+    "num_decks": 3070,
+    "potential_decks": 3114032
+  },
+  {
+    "name": "Mana Short",
+    "sanitized": "mana-short",
+    "sanitized_wo": "mana-short",
+    "url": "/cards/mana-short",
+    "inclusion": 3061,
+    "label": "In 3061 decks, 0% of 3310892 decks",
+    "num_decks": 3061,
+    "potential_decks": 3310892
+  },
+  {
+    "name": "Disintegrate",
+    "sanitized": "disintegrate",
+    "sanitized_wo": "disintegrate",
+    "url": "/cards/disintegrate",
+    "inclusion": 2990,
+    "label": "In 2990 decks, 0% of 3313588 decks",
+    "num_decks": 2990,
+    "potential_decks": 3313588
+  },
+  {
+    "name": "Dwarven Warriors",
+    "sanitized": "dwarven-warriors",
+    "sanitized_wo": "dwarven-warriors",
+    "url": "/cards/dwarven-warriors",
+    "inclusion": 2899,
+    "label": "In 2899 decks, 0% of 3313588 decks",
+    "num_decks": 2899,
+    "potential_decks": 3313588
+  },
+  {
+    "name": "Fear",
+    "sanitized": "fear",
+    "sanitized_wo": "fear",
+    "url": "/cards/fear",
+    "inclusion": 2805,
+    "label": "In 2805 decks, 0% of 3395771 decks",
+    "num_decks": 2805,
+    "potential_decks": 3395771
+  },
+  {
+    "name": "Black Knight",
+    "sanitized": "black-knight",
+    "sanitized_wo": "black-knight",
+    "url": "/cards/black-knight",
+    "inclusion": 2761,
+    "label": "In 2761 decks, 0% of 3395771 decks",
+    "num_decks": 2761,
+    "potential_decks": 3395771
+  },
+  {
+    "name": "Righteousness",
+    "sanitized": "righteousness",
+    "sanitized_wo": "righteousness",
+    "url": "/cards/righteousness",
+    "inclusion": 2697,
+    "label": "In 2697 decks, 0% of 3114990 decks",
+    "num_decks": 2697,
+    "potential_decks": 3114990
+  },
+  {
+    "name": "Wall of Air",
+    "sanitized": "wall-of-air",
+    "sanitized_wo": "wall-of-air",
+    "url": "/cards/wall-of-air",
+    "inclusion": 2659,
+    "label": "In 2659 decks, 0% of 3310892 decks",
+    "num_decks": 2659,
+    "potential_decks": 3310892
+  },
+  {
+    "name": "Will-o'-the-Wisp",
+    "sanitized": "will-o-the-wisp",
+    "sanitized_wo": "will-o-the-wisp",
+    "url": "/cards/will-o-the-wisp",
+    "inclusion": 2630,
+    "label": "In 2630 decks, 0% of 3395771 decks",
+    "num_decks": 2630,
+    "potential_decks": 3395771
+  },
+  {
+    "name": "Vesuvan Doppelganger",
+    "sanitized": "vesuvan-doppelganger",
+    "sanitized_wo": "vesuvan-doppelganger",
+    "url": "/cards/vesuvan-doppelganger",
+    "inclusion": 2566,
+    "label": "In 2566 decks, 0% of 3310892 decks",
+    "num_decks": 2566,
+    "potential_decks": 3310892
+  },
+  {
+    "name": "Jade Monolith",
+    "sanitized": "jade-monolith",
+    "sanitized_wo": "jade-monolith",
+    "url": "/cards/jade-monolith",
+    "inclusion": 2561,
+    "label": "In 2561 decks, 0% of 6719784 decks",
+    "num_decks": 2561,
+    "potential_decks": 6719784
+  },
+  {
+    "name": "Drain Power",
+    "sanitized": "drain-power",
+    "sanitized_wo": "drain-power",
+    "url": "/cards/drain-power",
+    "inclusion": 2560,
+    "label": "In 2560 decks, 0% of 3310892 decks",
+    "num_decks": 2560,
+    "potential_decks": 3310892
+  },
+  {
+    "name": "Goblin Balloon Brigade",
+    "sanitized": "goblin-balloon-brigade",
+    "sanitized_wo": "goblin-balloon-brigade",
+    "url": "/cards/goblin-balloon-brigade",
+    "inclusion": 2328,
+    "label": "In 2328 decks, 0% of 3313588 decks",
+    "num_decks": 2328,
+    "potential_decks": 3313588
+  },
+  {
+    "name": "Drudge Skeletons",
+    "sanitized": "drudge-skeletons",
+    "sanitized_wo": "drudge-skeletons",
+    "url": "/cards/drudge-skeletons",
+    "inclusion": 2321,
+    "label": "In 2321 decks, 0% of 3395771 decks",
+    "num_decks": 2321,
+    "potential_decks": 3395771
+  },
+  {
+    "name": "Tranquility",
+    "sanitized": "tranquility",
+    "sanitized_wo": "tranquility",
+    "url": "/cards/tranquility",
+    "inclusion": 2286,
+    "label": "In 2286 decks, 0% of 3114032 decks",
+    "num_decks": 2286,
+    "potential_decks": 3114032
+  },
+  {
+    "name": "Deathgrip",
+    "sanitized": "deathgrip",
+    "sanitized_wo": "deathgrip",
+    "url": "/cards/deathgrip",
+    "inclusion": 2104,
+    "label": "In 2104 decks, 0% of 3395771 decks",
+    "num_decks": 2104,
+    "potential_decks": 3395771
+  },
+  {
+    "name": "Steal Artifact",
+    "sanitized": "steal-artifact",
+    "sanitized_wo": "steal-artifact",
+    "url": "/cards/steal-artifact",
+    "inclusion": 2083,
+    "label": "In 2083 decks, 0% of 3310892 decks",
+    "num_decks": 2083,
+    "potential_decks": 3310892
+  },
+  {
+    "name": "Sengir Vampire",
+    "sanitized": "sengir-vampire",
+    "sanitized_wo": "sengir-vampire",
+    "url": "/cards/sengir-vampire",
+    "inclusion": 2026,
+    "label": "In 2026 decks, 0% of 3395771 decks",
+    "num_decks": 2026,
+    "potential_decks": 3395771
+  },
+  {
+    "name": "Forcefield",
+    "sanitized": "forcefield",
+    "sanitized_wo": "forcefield",
+    "url": "/cards/forcefield",
+    "inclusion": 2012,
+    "label": "In 2012 decks, 0% of 6719784 decks",
+    "num_decks": 2012,
+    "potential_decks": 6719784
+  },
+  {
+    "name": "White Knight",
+    "sanitized": "white-knight",
+    "sanitized_wo": "white-knight",
+    "url": "/cards/white-knight",
+    "inclusion": 1994,
+    "label": "In 1994 decks, 0% of 3114990 decks",
+    "num_decks": 1994,
+    "potential_decks": 3114990
+  },
+  {
+    "name": "Sinkhole",
+    "sanitized": "sinkhole",
+    "sanitized_wo": "sinkhole",
+    "url": "/cards/sinkhole",
+    "inclusion": 1949,
+    "label": "In 1949 decks, 0% of 3395771 decks",
+    "num_decks": 1949,
+    "potential_decks": 3395771
+  },
+  {
+    "name": "Lifeforce",
+    "sanitized": "lifeforce",
+    "sanitized_wo": "lifeforce",
+    "url": "/cards/lifeforce",
+    "inclusion": 1916,
+    "label": "In 1916 decks, 0% of 3114032 decks",
+    "num_decks": 1916,
+    "potential_decks": 3114032
+  },
+  {
+    "name": "Dragon Whelp",
+    "sanitized": "dragon-whelp",
+    "sanitized_wo": "dragon-whelp",
+    "url": "/cards/dragon-whelp",
+    "inclusion": 1893,
+    "label": "In 1893 decks, 0% of 3313588 decks",
+    "num_decks": 1893,
+    "potential_decks": 3313588
+  },
+  {
+    "name": "Stream of Life",
+    "sanitized": "stream-of-life",
+    "sanitized_wo": "stream-of-life",
+    "url": "/cards/stream-of-life",
+    "inclusion": 1883,
+    "label": "In 1883 decks, 0% of 3114032 decks",
+    "num_decks": 1883,
+    "potential_decks": 3114032
+  },
+  {
+    "name": "Reverse Damage",
+    "sanitized": "reverse-damage",
+    "sanitized_wo": "reverse-damage",
+    "url": "/cards/reverse-damage",
+    "inclusion": 1768,
+    "label": "In 1768 decks, 0% of 3114990 decks",
+    "num_decks": 1768,
+    "potential_decks": 3114990
+  },
+  {
+    "name": "Circle of Protection: White",
+    "sanitized": "circle-of-protection-white",
+    "sanitized_wo": "circle-of-protection-white",
+    "url": "/cards/circle-of-protection-white",
+    "inclusion": 1737,
+    "label": "In 1737 decks, 0% of 3114990 decks",
+    "num_decks": 1737,
+    "potential_decks": 3114990
+  },
+  {
+    "name": "Sleight of Mind",
+    "sanitized": "sleight-of-mind",
+    "sanitized_wo": "sleight-of-mind",
+    "url": "/cards/sleight-of-mind",
+    "inclusion": 1728,
+    "label": "In 1728 decks, 0% of 3310892 decks",
+    "num_decks": 1728,
+    "potential_decks": 3310892
+  },
+  {
+    "name": "Simulacrum",
+    "sanitized": "simulacrum",
+    "sanitized_wo": "simulacrum",
+    "url": "/cards/simulacrum",
+    "inclusion": 1717,
+    "label": "In 1717 decks, 0% of 3395771 decks",
+    "num_decks": 1717,
+    "potential_decks": 3395771
+  },
+  {
+    "name": "Tsunami",
+    "sanitized": "tsunami",
+    "sanitized_wo": "tsunami",
+    "url": "/cards/tsunami",
+    "inclusion": 1714,
+    "label": "In 1714 decks, 0% of 3114032 decks",
+    "num_decks": 1714,
+    "potential_decks": 3114032
+  },
+  {
+    "name": "Juggernaut",
+    "sanitized": "juggernaut",
+    "sanitized_wo": "juggernaut",
+    "url": "/cards/juggernaut",
+    "inclusion": 1640,
+    "label": "In 1640 decks, 0% of 6719784 decks",
+    "num_decks": 1640,
+    "potential_decks": 6719784
+  },
+  {
+    "name": "Karma",
+    "sanitized": "karma",
+    "sanitized_wo": "karma",
+    "url": "/cards/karma",
+    "inclusion": 1637,
+    "label": "In 1637 decks, 0% of 3114990 decks",
+    "num_decks": 1637,
+    "potential_decks": 3114990
+  },
+  {
+    "name": "Helm of Chatzuk",
+    "sanitized": "helm-of-chatzuk",
+    "sanitized_wo": "helm-of-chatzuk",
+    "url": "/cards/helm-of-chatzuk",
+    "inclusion": 1636,
+    "label": "In 1636 decks, 0% of 6719784 decks",
+    "num_decks": 1636,
+    "potential_decks": 6719784
+  },
+  {
+    "name": "Giant Spider",
+    "sanitized": "giant-spider",
+    "sanitized_wo": "giant-spider",
+    "url": "/cards/giant-spider",
+    "inclusion": 1608,
+    "label": "In 1608 decks, 0% of 3114032 decks",
+    "num_decks": 1608,
+    "potential_decks": 3114032
+  },
+  {
+    "name": "Castle",
+    "sanitized": "castle",
+    "sanitized_wo": "castle",
+    "url": "/cards/castle",
+    "inclusion": 1572,
+    "label": "In 1572 decks, 0% of 3114990 decks",
+    "num_decks": 1572,
+    "potential_decks": 3114990
+  },
+  {
+    "name": "Unholy Strength",
+    "sanitized": "unholy-strength",
+    "sanitized_wo": "unholy-strength",
+    "url": "/cards/unholy-strength",
+    "inclusion": 1544,
+    "label": "In 1544 decks, 0% of 3395771 decks",
+    "num_decks": 1544,
+    "potential_decks": 3395771
+  },
+  {
+    "name": "Lich",
+    "sanitized": "lich",
+    "sanitized_wo": "lich",
+    "url": "/cards/lich",
+    "inclusion": 1504,
+    "label": "In 1504 decks, 0% of 3395771 decks",
+    "num_decks": 1504,
+    "potential_decks": 3395771
+  },
+  {
+    "name": "Scryb Sprites",
+    "sanitized": "scryb-sprites",
+    "sanitized_wo": "scryb-sprites",
+    "url": "/cards/scryb-sprites",
+    "inclusion": 1503,
+    "label": "In 1503 decks, 0% of 3114032 decks",
+    "num_decks": 1503,
+    "potential_decks": 3114032
+  },
+  {
+    "name": "Living Wall",
+    "sanitized": "living-wall",
+    "sanitized_wo": "living-wall",
+    "url": "/cards/living-wall",
+    "inclusion": 1471,
+    "label": "In 1471 decks, 0% of 6719784 decks",
+    "num_decks": 1471,
+    "potential_decks": 6719784
+  },
+  {
+    "name": "Orcish Artillery",
+    "sanitized": "orcish-artillery",
+    "sanitized_wo": "orcish-artillery",
+    "url": "/cards/orcish-artillery",
+    "inclusion": 1470,
+    "label": "In 1470 decks, 0% of 3313588 decks",
+    "num_decks": 1470,
+    "potential_decks": 3313588
+  },
+  {
+    "name": "Wall of Bone",
+    "sanitized": "wall-of-bone",
+    "sanitized_wo": "wall-of-bone",
+    "url": "/cards/wall-of-bone",
+    "inclusion": 1459,
+    "label": "In 1459 decks, 0% of 3395771 decks",
+    "num_decks": 1459,
+    "potential_decks": 3395771
+  },
+  {
+    "name": "Word of Command",
+    "sanitized": "word-of-command",
+    "sanitized_wo": "word-of-command",
+    "url": "/cards/word-of-command",
+    "inclusion": 1416,
+    "label": "In 1416 decks, 0% of 3395771 decks",
+    "num_decks": 1416,
+    "potential_decks": 3395771
+  },
+  {
+    "name": "Wall of Swords",
+    "sanitized": "wall-of-swords",
+    "sanitized_wo": "wall-of-swords",
+    "url": "/cards/wall-of-swords",
+    "inclusion": 1410,
+    "label": "In 1410 decks, 0% of 3114990 decks",
+    "num_decks": 1410,
+    "potential_decks": 3114990
+  },
+  {
+    "name": "Bog Wraith",
+    "sanitized": "bog-wraith",
+    "sanitized_wo": "bog-wraith",
+    "url": "/cards/bog-wraith",
+    "inclusion": 1394,
+    "label": "In 1394 decks, 0% of 3395771 decks",
+    "num_decks": 1394,
+    "potential_decks": 3395771
+  },
+  {
+    "name": "Paralyze",
+    "sanitized": "paralyze",
+    "sanitized_wo": "paralyze",
+    "url": "/cards/paralyze",
+    "inclusion": 1307,
+    "label": "In 1307 decks, 0% of 3395771 decks",
+    "num_decks": 1307,
+    "potential_decks": 3395771
+  },
+  {
+    "name": "Jayemdae Tome",
+    "sanitized": "jayemdae-tome",
+    "sanitized_wo": "jayemdae-tome",
+    "url": "/cards/jayemdae-tome",
+    "inclusion": 1306,
+    "label": "In 1306 decks, 0% of 6719784 decks",
+    "num_decks": 1306,
+    "potential_decks": 6719784
+  },
+  {
+    "name": "Circle of Protection: Red",
+    "sanitized": "circle-of-protection-red",
+    "sanitized_wo": "circle-of-protection-red",
+    "url": "/cards/circle-of-protection-red",
+    "inclusion": 1276,
+    "label": "In 1276 decks, 0% of 3114990 decks",
+    "num_decks": 1276,
+    "potential_decks": 3114990
+  },
+  {
+    "name": "Spell Blast",
+    "sanitized": "spell-blast",
+    "sanitized_wo": "spell-blast",
+    "url": "/cards/spell-blast",
+    "inclusion": 1231,
+    "label": "In 1231 decks, 0% of 3310892 decks",
+    "num_decks": 1231,
+    "potential_decks": 3310892
+  },
+  {
+    "name": "Pirate Ship",
+    "sanitized": "pirate-ship",
+    "sanitized_wo": "pirate-ship",
+    "url": "/cards/pirate-ship",
+    "inclusion": 1228,
+    "label": "In 1228 decks, 0% of 3310892 decks",
+    "num_decks": 1228,
+    "potential_decks": 3310892
+  },
+  {
+    "name": "Holy Strength",
+    "sanitized": "holy-strength",
+    "sanitized_wo": "holy-strength",
+    "url": "/cards/holy-strength",
+    "inclusion": 1227,
+    "label": "In 1227 decks, 0% of 3114990 decks",
+    "num_decks": 1227,
+    "potential_decks": 3114990
+  },
+  {
+    "name": "Lifetap",
+    "sanitized": "lifetap",
+    "sanitized_wo": "lifetap",
+    "url": "/cards/lifetap",
+    "inclusion": 1204,
+    "label": "In 1204 decks, 0% of 3310892 decks",
+    "num_decks": 1204,
+    "potential_decks": 3310892
+  },
+  {
+    "name": "Firebreathing",
+    "sanitized": "firebreathing",
+    "sanitized_wo": "firebreathing",
+    "url": "/cards/firebreathing",
+    "inclusion": 1204,
+    "label": "In 1204 decks, 0% of 3313588 decks",
+    "num_decks": 1204,
+    "potential_decks": 3313588
+  },
+  {
+    "name": "Raging River",
+    "sanitized": "raging-river",
+    "sanitized_wo": "raging-river",
+    "url": "/cards/raging-river",
+    "inclusion": 1201,
+    "label": "In 1201 decks, 0% of 3313588 decks",
+    "num_decks": 1201,
+    "potential_decks": 3313588
+  },
+  {
+    "name": "Circle of Protection: Black",
+    "sanitized": "circle-of-protection-black",
+    "sanitized_wo": "circle-of-protection-black",
+    "url": "/cards/circle-of-protection-black",
+    "inclusion": 1200,
+    "label": "In 1200 decks, 0% of 3114990 decks",
+    "num_decks": 1200,
+    "potential_decks": 3114990
+  },
+  {
+    "name": "Wall of Stone",
+    "sanitized": "wall-of-stone",
+    "sanitized_wo": "wall-of-stone",
+    "url": "/cards/wall-of-stone",
+    "inclusion": 1198,
+    "label": "In 1198 decks, 0% of 3313588 decks",
+    "num_decks": 1198,
+    "potential_decks": 3313588
+  },
+  {
+    "name": "Circle of Protection: Green",
+    "sanitized": "circle-of-protection-green",
+    "sanitized_wo": "circle-of-protection-green",
+    "url": "/cards/circle-of-protection-green",
+    "inclusion": 1175,
+    "label": "In 1175 decks, 0% of 3114990 decks",
+    "num_decks": 1175,
+    "potential_decks": 3114990
+  },
+  {
+    "name": "Siren's Call",
+    "sanitized": "sirens-call",
+    "sanitized_wo": "sirens-call",
+    "url": "/cards/sirens-call",
+    "inclusion": 1127,
+    "label": "In 1127 decks, 0% of 3310892 decks",
+    "num_decks": 1127,
+    "potential_decks": 3310892
+  },
+  {
+    "name": "Nether Shadow",
+    "sanitized": "nether-shadow",
+    "sanitized_wo": "nether-shadow",
+    "url": "/cards/nether-shadow",
+    "inclusion": 1126,
+    "label": "In 1126 decks, 0% of 3395771 decks",
+    "num_decks": 1126,
+    "potential_decks": 3395771
+  },
+  {
+    "name": "Evil Presence",
+    "sanitized": "evil-presence",
+    "sanitized_wo": "evil-presence",
+    "url": "/cards/evil-presence",
+    "inclusion": 1120,
+    "label": "In 1120 decks, 0% of 3395771 decks",
+    "num_decks": 1120,
+    "potential_decks": 3395771
+  },
+  {
+    "name": "Flashfires",
+    "sanitized": "flashfires",
+    "sanitized_wo": "flashfires",
+    "url": "/cards/flashfires",
+    "inclusion": 1079,
+    "label": "In 1079 decks, 0% of 3313588 decks",
+    "num_decks": 1079,
+    "potential_decks": 3313588
+  },
+  {
+    "name": "Death Ward",
+    "sanitized": "death-ward",
+    "sanitized_wo": "death-ward",
+    "url": "/cards/death-ward",
+    "inclusion": 1073,
+    "label": "In 1073 decks, 0% of 3114990 decks",
+    "num_decks": 1073,
+    "potential_decks": 3114990
+  },
+  {
+    "name": "Flight",
+    "sanitized": "flight",
+    "sanitized_wo": "flight",
+    "url": "/cards/flight",
+    "inclusion": 1053,
+    "label": "In 1053 decks, 0% of 3310892 decks",
+    "num_decks": 1053,
+    "potential_decks": 3310892
+  },
+  {
+    "name": "Benalish Hero",
+    "sanitized": "benalish-hero",
+    "sanitized_wo": "benalish-hero",
+    "url": "/cards/benalish-hero",
+    "inclusion": 1023,
+    "label": "In 1023 decks, 0% of 3114990 decks",
+    "num_decks": 1023,
+    "potential_decks": 3114990
+  },
+  {
+    "name": "Mesa Pegasus",
+    "sanitized": "mesa-pegasus",
+    "sanitized_wo": "mesa-pegasus",
+    "url": "/cards/mesa-pegasus",
+    "inclusion": 1016,
+    "label": "In 1016 decks, 0% of 3114990 decks",
+    "num_decks": 1016,
+    "potential_decks": 3114990
+  },
+  {
+    "name": "Orcish Oriflamme",
+    "sanitized": "orcish-oriflamme",
+    "sanitized_wo": "orcish-oriflamme",
+    "url": "/cards/orcish-oriflamme",
+    "inclusion": 990,
+    "label": "In 990 decks, 0% of 3313588 decks",
+    "num_decks": 990,
+    "potential_decks": 3313588
+  },
+  {
+    "name": "Psionic Blast",
+    "sanitized": "psionic-blast",
+    "sanitized_wo": "psionic-blast",
+    "url": "/cards/psionic-blast",
+    "inclusion": 967,
+    "label": "In 967 decks, 0% of 3310892 decks",
+    "num_decks": 967,
+    "potential_decks": 3310892
+  },
+  {
+    "name": "Circle of Protection: Blue",
+    "sanitized": "circle-of-protection-blue",
+    "sanitized_wo": "circle-of-protection-blue",
+    "url": "/cards/circle-of-protection-blue",
+    "inclusion": 945,
+    "label": "In 945 decks, 0% of 3114990 decks",
+    "num_decks": 945,
+    "potential_decks": 3114990
+  },
+  {
+    "name": "Ley Druid",
+    "sanitized": "ley-druid",
+    "sanitized_wo": "ley-druid",
+    "url": "/cards/ley-druid",
+    "inclusion": 909,
+    "label": "In 909 decks, 0% of 3114032 decks",
+    "num_decks": 909,
+    "potential_decks": 3114032
+  },
+  {
+    "name": "Animate Wall",
+    "sanitized": "animate-wall",
+    "sanitized_wo": "animate-wall",
+    "url": "/cards/animate-wall",
+    "inclusion": 881,
+    "label": "In 881 decks, 0% of 3114990 decks",
+    "num_decks": 881,
+    "potential_decks": 3114990
+  },
+  {
+    "name": "Healing Salve",
+    "sanitized": "healing-salve",
+    "sanitized_wo": "healing-salve",
+    "url": "/cards/healing-salve",
+    "inclusion": 875,
+    "label": "In 875 decks, 0% of 3114990 decks",
+    "num_decks": 875,
+    "potential_decks": 3114990
+  },
+  {
+    "name": "Craw Wurm",
+    "sanitized": "craw-wurm",
+    "sanitized_wo": "craw-wurm",
+    "url": "/cards/craw-wurm",
+    "inclusion": 864,
+    "label": "In 864 decks, 0% of 3114032 decks",
+    "num_decks": 864,
+    "potential_decks": 3114032
+  },
+  {
+    "name": "Blessing",
+    "sanitized": "blessing",
+    "sanitized_wo": "blessing",
+    "url": "/cards/blessing",
+    "inclusion": 856,
+    "label": "In 856 decks, 0% of 3114990 decks",
+    "num_decks": 856,
+    "potential_decks": 3114990
+  },
+  {
+    "name": "Fungusaur",
+    "sanitized": "fungusaur",
+    "sanitized_wo": "fungusaur",
+    "url": "/cards/fungusaur",
+    "inclusion": 843,
+    "label": "In 843 decks, 0% of 3114032 decks",
+    "num_decks": 843,
+    "potential_decks": 3114032
+  },
+  {
+    "name": "Aspect of Wolf",
+    "sanitized": "aspect-of-wolf",
+    "sanitized_wo": "aspect-of-wolf",
+    "url": "/cards/aspect-of-wolf",
+    "inclusion": 840,
+    "label": "In 840 decks, 0% of 3114032 decks",
+    "num_decks": 840,
+    "potential_decks": 3114032
+  },
+  {
+    "name": "Northern Paladin",
+    "sanitized": "northern-paladin",
+    "sanitized_wo": "northern-paladin",
+    "url": "/cards/northern-paladin",
+    "inclusion": 819,
+    "label": "In 819 decks, 0% of 3114990 decks",
+    "num_decks": 819,
+    "potential_decks": 3114990
+  },
+  {
+    "name": "Magical Hack",
+    "sanitized": "magical-hack",
+    "sanitized_wo": "magical-hack",
+    "url": "/cards/magical-hack",
+    "inclusion": 801,
+    "label": "In 801 decks, 0% of 3310892 decks",
+    "num_decks": 801,
+    "potential_decks": 3310892
+  },
+  {
+    "name": "Blue Ward",
+    "sanitized": "blue-ward",
+    "sanitized_wo": "blue-ward",
+    "url": "/cards/blue-ward",
+    "inclusion": 790,
+    "label": "In 790 decks, 0% of 3114990 decks",
+    "num_decks": 790,
+    "potential_decks": 3114990
+  },
+  {
+    "name": "Black Ward",
+    "sanitized": "black-ward",
+    "sanitized_wo": "black-ward",
+    "url": "/cards/black-ward",
+    "inclusion": 767,
+    "label": "In 767 decks, 0% of 3114990 decks",
+    "num_decks": 767,
+    "potential_decks": 3114990
+  },
+  {
+    "name": "Burrowing",
+    "sanitized": "burrowing",
+    "sanitized_wo": "burrowing",
+    "url": "/cards/burrowing",
+    "inclusion": 751,
+    "label": "In 751 decks, 0% of 3313588 decks",
+    "num_decks": 751,
+    "potential_decks": 3313588
+  },
+  {
+    "name": "Wall of Fire",
+    "sanitized": "wall-of-fire",
+    "sanitized_wo": "wall-of-fire",
+    "url": "/cards/wall-of-fire",
+    "inclusion": 734,
+    "label": "In 734 decks, 0% of 3313588 decks",
+    "num_decks": 734,
+    "potential_decks": 3313588
+  },
+  {
+    "name": "Earthbind",
+    "sanitized": "earthbind",
+    "sanitized_wo": "earthbind",
+    "url": "/cards/earthbind",
+    "inclusion": 713,
+    "label": "In 713 decks, 0% of 3313588 decks",
+    "num_decks": 713,
+    "potential_decks": 3313588
+  },
+  {
+    "name": "Timber Wolves",
+    "sanitized": "timber-wolves",
+    "sanitized_wo": "timber-wolves",
+    "url": "/cards/timber-wolves",
+    "inclusion": 657,
+    "label": "In 657 decks, 0% of 3114032 decks",
+    "num_decks": 657,
+    "potential_decks": 3114032
+  },
+  {
+    "name": "Wall of Wood",
+    "sanitized": "wall-of-wood",
+    "sanitized_wo": "wall-of-wood",
+    "url": "/cards/wall-of-wood",
+    "inclusion": 641,
+    "label": "In 641 decks, 0% of 3114032 decks",
+    "num_decks": 641,
+    "potential_decks": 3114032
+  },
+  {
+    "name": "Fire Elemental",
+    "sanitized": "fire-elemental",
+    "sanitized_wo": "fire-elemental",
+    "url": "/cards/fire-elemental",
+    "inclusion": 634,
+    "label": "In 634 decks, 0% of 3313588 decks",
+    "num_decks": 634,
+    "potential_decks": 3313588
+  },
+  {
+    "name": "Red Ward",
+    "sanitized": "red-ward",
+    "sanitized_wo": "red-ward",
+    "url": "/cards/red-ward",
+    "inclusion": 631,
+    "label": "In 631 decks, 0% of 3114990 decks",
+    "num_decks": 631,
+    "potential_decks": 3114990
+  },
+  {
+    "name": "Keldon Warlord",
+    "sanitized": "keldon-warlord",
+    "sanitized_wo": "keldon-warlord",
+    "url": "/cards/keldon-warlord",
+    "inclusion": 628,
+    "label": "In 628 decks, 0% of 3313588 decks",
+    "num_decks": 628,
+    "potential_decks": 3313588
+  },
+  {
+    "name": "Green Ward",
+    "sanitized": "green-ward",
+    "sanitized_wo": "green-ward",
+    "url": "/cards/green-ward",
+    "inclusion": 598,
+    "label": "In 598 decks, 0% of 3114990 decks",
+    "num_decks": 598,
+    "potential_decks": 3114990
+  },
+  {
+    "name": "Throne of Bone",
+    "sanitized": "throne-of-bone",
+    "sanitized_wo": "throne-of-bone",
+    "url": "/cards/throne-of-bone",
+    "inclusion": 591,
+    "label": "In 591 decks, 0% of 6719784 decks",
+    "num_decks": 591,
+    "potential_decks": 6719784
+  },
+  {
+    "name": "False Orders",
+    "sanitized": "false-orders",
+    "sanitized_wo": "false-orders",
+    "url": "/cards/false-orders",
+    "inclusion": 583,
+    "label": "In 583 decks, 0% of 3313588 decks",
+    "num_decks": 583,
+    "potential_decks": 3313588
+  },
+  {
+    "name": "Consecrate Land",
+    "sanitized": "consecrate-land",
+    "sanitized_wo": "consecrate-land",
+    "url": "/cards/consecrate-land",
+    "inclusion": 573,
+    "label": "In 573 decks, 0% of 3114990 decks",
+    "num_decks": 573,
+    "potential_decks": 3114990
+  },
+  {
+    "name": "Elvish Archers",
+    "sanitized": "elvish-archers",
+    "sanitized_wo": "elvish-archers",
+    "url": "/cards/elvish-archers",
+    "inclusion": 570,
+    "label": "In 570 decks, 0% of 3114032 decks",
+    "num_decks": 570,
+    "potential_decks": 3114032
+  },
+  {
+    "name": "Mons's Goblin Raiders",
+    "sanitized": "monss-goblin-raiders",
+    "sanitized_wo": "monss-goblin-raiders",
+    "url": "/cards/monss-goblin-raiders",
+    "inclusion": 561,
+    "label": "In 561 decks, 0% of 3313588 decks",
+    "num_decks": 561,
+    "potential_decks": 3313588
+  },
+  {
+    "name": "Demonic Hordes",
+    "sanitized": "demonic-hordes",
+    "sanitized_wo": "demonic-hordes",
+    "url": "/cards/demonic-hordes",
+    "inclusion": 559,
+    "label": "In 559 decks, 0% of 3395771 decks",
+    "num_decks": 559,
+    "potential_decks": 3395771
+  },
+  {
+    "name": "Nettling Imp",
+    "sanitized": "nettling-imp",
+    "sanitized_wo": "nettling-imp",
+    "url": "/cards/nettling-imp",
+    "inclusion": 558,
+    "label": "In 558 decks, 0% of 3395771 decks",
+    "num_decks": 558,
+    "potential_decks": 3395771
+  },
+  {
+    "name": "Psychic Venom",
+    "sanitized": "psychic-venom",
+    "sanitized_wo": "psychic-venom",
+    "url": "/cards/psychic-venom",
+    "inclusion": 549,
+    "label": "In 549 decks, 0% of 3310892 decks",
+    "num_decks": 549,
+    "potential_decks": 3310892
+  },
+  {
+    "name": "Pearled Unicorn",
+    "sanitized": "pearled-unicorn",
+    "sanitized_wo": "pearled-unicorn",
+    "url": "/cards/pearled-unicorn",
+    "inclusion": 547,
+    "label": "In 547 decks, 0% of 3114990 decks",
+    "num_decks": 547,
+    "potential_decks": 3114990
+  },
+  {
+    "name": "Phantasmal Terrain",
+    "sanitized": "phantasmal-terrain",
+    "sanitized_wo": "phantasmal-terrain",
+    "url": "/cards/phantasmal-terrain",
+    "inclusion": 525,
+    "label": "In 525 decks, 0% of 3310892 decks",
+    "num_decks": 525,
+    "potential_decks": 3310892
+  },
+  {
+    "name": "Jump",
+    "sanitized": "jump",
+    "sanitized_wo": "jump",
+    "url": "/cards/jump",
+    "inclusion": 523,
+    "label": "In 523 decks, 0% of 3310892 decks",
+    "num_decks": 523,
+    "potential_decks": 3310892
+  },
+  {
+    "name": "Cursed Land",
+    "sanitized": "cursed-land",
+    "sanitized_wo": "cursed-land",
+    "url": "/cards/cursed-land",
+    "inclusion": 519,
+    "label": "In 519 decks, 0% of 3395771 decks",
+    "num_decks": 519,
+    "potential_decks": 3395771
+  },
+  {
+    "name": "Air Elemental",
+    "sanitized": "air-elemental",
+    "sanitized_wo": "air-elemental",
+    "url": "/cards/air-elemental",
+    "inclusion": 497,
+    "label": "In 497 decks, 0% of 3310892 decks",
+    "num_decks": 497,
+    "potential_decks": 3310892
+  },
+  {
+    "name": "Shanodin Dryads",
+    "sanitized": "shanodin-dryads",
+    "sanitized_wo": "shanodin-dryads",
+    "url": "/cards/shanodin-dryads",
+    "inclusion": 493,
+    "label": "In 493 decks, 0% of 3114032 decks",
+    "num_decks": 493,
+    "potential_decks": 3114032
+  },
+  {
+    "name": "Blaze of Glory",
+    "sanitized": "blaze-of-glory",
+    "sanitized_wo": "blaze-of-glory",
+    "url": "/cards/blaze-of-glory",
+    "inclusion": 491,
+    "label": "In 491 decks, 0% of 3114990 decks",
+    "num_decks": 491,
+    "potential_decks": 3114990
+  },
+  {
+    "name": "Mahamoti Djinn",
+    "sanitized": "mahamoti-djinn",
+    "sanitized_wo": "mahamoti-djinn",
+    "url": "/cards/mahamoti-djinn",
+    "inclusion": 490,
+    "label": "In 490 decks, 0% of 3310892 decks",
+    "num_decks": 490,
+    "potential_decks": 3310892
+  },
+  {
+    "name": "Gloom",
+    "sanitized": "gloom",
+    "sanitized_wo": "gloom",
+    "url": "/cards/gloom",
+    "inclusion": 483,
+    "label": "In 483 decks, 0% of 3395771 decks",
+    "num_decks": 483,
+    "potential_decks": 3395771
+  },
+  {
+    "name": "Kudzu",
+    "sanitized": "kudzu",
+    "sanitized_wo": "kudzu",
+    "url": "/cards/kudzu",
+    "inclusion": 481,
+    "label": "In 481 decks, 0% of 3114032 decks",
+    "num_decks": 481,
+    "potential_decks": 3114032
+  },
+  {
+    "name": "Illusionary Mask",
+    "sanitized": "illusionary-mask",
+    "sanitized_wo": "illusionary-mask",
+    "url": "/cards/illusionary-mask",
+    "inclusion": 478,
+    "label": "In 478 decks, 0% of 6719784 decks",
+    "num_decks": 478,
+    "potential_decks": 6719784
+  },
+  {
+    "name": "Soul Net",
+    "sanitized": "soul-net",
+    "sanitized_wo": "soul-net",
+    "url": "/cards/soul-net",
+    "inclusion": 477,
+    "label": "In 477 decks, 0% of 6719784 decks",
+    "num_decks": 477,
+    "potential_decks": 6719784
+  },
+  {
+    "name": "The Hive",
+    "sanitized": "the-hive",
+    "sanitized_wo": "the-hive",
+    "url": "/cards/the-hive",
+    "inclusion": 466,
+    "label": "In 466 decks, 0% of 6719784 decks",
+    "num_decks": 466,
+    "potential_decks": 6719784
+  },
+  {
+    "name": "Thoughtlace",
+    "sanitized": "thoughtlace",
+    "sanitized_wo": "thoughtlace",
+    "url": "/cards/thoughtlace",
+    "inclusion": 461,
+    "label": "In 461 decks, 0% of 3310892 decks",
+    "num_decks": 461,
+    "potential_decks": 3310892
+  },
+  {
+    "name": "Animate Artifact",
+    "sanitized": "animate-artifact",
+    "sanitized_wo": "animate-artifact",
+    "url": "/cards/animate-artifact",
+    "inclusion": 456,
+    "label": "In 456 decks, 0% of 3310892 decks",
+    "num_decks": 456,
+    "potential_decks": 3310892
+  },
+  {
+    "name": "Ivory Cup",
+    "sanitized": "ivory-cup",
+    "sanitized_wo": "ivory-cup",
+    "url": "/cards/ivory-cup",
+    "inclusion": 447,
+    "label": "In 447 decks, 0% of 6719784 decks",
+    "num_decks": 447,
+    "potential_decks": 6719784
+  },
+  {
+    "name": "Camouflage",
+    "sanitized": "camouflage",
+    "sanitized_wo": "camouflage",
+    "url": "/cards/camouflage",
+    "inclusion": 429,
+    "label": "In 429 decks, 0% of 3114032 decks",
+    "num_decks": 429,
+    "potential_decks": 3114032
+  },
+  {
+    "name": "Wall of Brambles",
+    "sanitized": "wall-of-brambles",
+    "sanitized_wo": "wall-of-brambles",
+    "url": "/cards/wall-of-brambles",
+    "inclusion": 426,
+    "label": "In 426 decks, 0% of 3114032 decks",
+    "num_decks": 426,
+    "potential_decks": 3114032
+  },
+  {
+    "name": "Gaea's Liege",
+    "sanitized": "gaeas-liege",
+    "sanitized_wo": "gaeas-liege",
+    "url": "/cards/gaeas-liege",
+    "inclusion": 424,
+    "label": "In 424 decks, 0% of 3114032 decks",
+    "num_decks": 424,
+    "potential_decks": 3114032
+  },
+  {
+    "name": "Plague Rats",
+    "sanitized": "plague-rats",
+    "sanitized_wo": "plague-rats",
+    "url": "/cards/plague-rats",
+    "inclusion": 420,
+    "label": "In 420 decks, 0% of 3395771 decks",
+    "num_decks": 420,
+    "potential_decks": 3395771
+  },
+  {
+    "name": "Cockatrice",
+    "sanitized": "cockatrice",
+    "sanitized_wo": "cockatrice",
+    "url": "/cards/cockatrice",
+    "inclusion": 414,
+    "label": "In 414 decks, 0% of 3114032 decks",
+    "num_decks": 414,
+    "potential_decks": 3114032
+  },
+  {
+    "name": "Sunglasses of Urza",
+    "sanitized": "sunglasses-of-urza",
+    "sanitized_wo": "sunglasses-of-urza",
+    "url": "/cards/sunglasses-of-urza",
+    "inclusion": 407,
+    "label": "In 407 decks, 0% of 6719784 decks",
+    "num_decks": 407,
+    "potential_decks": 6719784
+  },
+  {
+    "name": "White Ward",
+    "sanitized": "white-ward",
+    "sanitized_wo": "white-ward",
+    "url": "/cards/white-ward",
+    "inclusion": 396,
+    "label": "In 396 decks, 0% of 3114990 decks",
+    "num_decks": 396,
+    "potential_decks": 3114990
+  },
+  {
+    "name": "Holy Armor",
+    "sanitized": "holy-armor",
+    "sanitized_wo": "holy-armor",
+    "url": "/cards/holy-armor",
+    "inclusion": 393,
+    "label": "In 393 decks, 0% of 3114990 decks",
+    "num_decks": 393,
+    "potential_decks": 3114990
+  },
+  {
+    "name": "Merfolk of the Pearl Trident",
+    "sanitized": "merfolk-of-the-pearl-trident",
+    "sanitized_wo": "merfolk-of-the-pearl-trident",
+    "url": "/cards/merfolk-of-the-pearl-trident",
+    "inclusion": 389,
+    "label": "In 389 decks, 0% of 3310892 decks",
+    "num_decks": 389,
+    "potential_decks": 3310892
+  },
+  {
+    "name": "Rod of Ruin",
+    "sanitized": "rod-of-ruin",
+    "sanitized_wo": "rod-of-ruin",
+    "url": "/cards/rod-of-ruin",
+    "inclusion": 342,
+    "label": "In 342 decks, 0% of 6719784 decks",
+    "num_decks": 342,
+    "potential_decks": 6719784
+  },
+  {
+    "name": "Conversion",
+    "sanitized": "conversion",
+    "sanitized_wo": "conversion",
+    "url": "/cards/conversion",
+    "inclusion": 327,
+    "label": "In 327 decks, 0% of 3114990 decks",
+    "num_decks": 327,
+    "potential_decks": 3114990
+  },
+  {
+    "name": "Wall of Water",
+    "sanitized": "wall-of-water",
+    "sanitized_wo": "wall-of-water",
+    "url": "/cards/wall-of-water",
+    "inclusion": 317,
+    "label": "In 317 decks, 0% of 3310892 decks",
+    "num_decks": 317,
+    "potential_decks": 3310892
+  },
+  {
+    "name": "Disrupting Scepter",
+    "sanitized": "disrupting-scepter",
+    "sanitized_wo": "disrupting-scepter",
+    "url": "/cards/disrupting-scepter",
+    "inclusion": 301,
+    "label": "In 301 decks, 0% of 6719784 decks",
+    "num_decks": 301,
+    "potential_decks": 6719784
+  },
+  {
+    "name": "Creature Bond",
+    "sanitized": "creature-bond",
+    "sanitized_wo": "creature-bond",
+    "url": "/cards/creature-bond",
+    "inclusion": 290,
+    "label": "In 290 decks, 0% of 3310892 decks",
+    "num_decks": 290,
+    "potential_decks": 3310892
+  },
+  {
+    "name": "Rock Hydra",
+    "sanitized": "rock-hydra",
+    "sanitized_wo": "rock-hydra",
+    "url": "/cards/rock-hydra",
+    "inclusion": 290,
+    "label": "In 290 decks, 0% of 3313588 decks",
+    "num_decks": 290,
+    "potential_decks": 3313588
+  },
+  {
+    "name": "Crystal Rod",
+    "sanitized": "crystal-rod",
+    "sanitized_wo": "crystal-rod",
+    "url": "/cards/crystal-rod",
+    "inclusion": 290,
+    "label": "In 290 decks, 0% of 6719784 decks",
+    "num_decks": 290,
+    "potential_decks": 6719784
+  },
+  {
+    "name": "Veteran Bodyguard",
+    "sanitized": "veteran-bodyguard",
+    "sanitized_wo": "veteran-bodyguard",
+    "url": "/cards/veteran-bodyguard",
+    "inclusion": 288,
+    "label": "In 288 decks, 0% of 3114990 decks",
+    "num_decks": 288,
+    "potential_decks": 3114990
+  },
+  {
+    "name": "Force of Nature",
+    "sanitized": "force-of-nature",
+    "sanitized_wo": "force-of-nature",
+    "url": "/cards/force-of-nature",
+    "inclusion": 286,
+    "label": "In 286 decks, 0% of 3114032 decks",
+    "num_decks": 286,
+    "potential_decks": 3114032
+  },
+  {
+    "name": "Frozen Shade",
+    "sanitized": "frozen-shade",
+    "sanitized_wo": "frozen-shade",
+    "url": "/cards/frozen-shade",
+    "inclusion": 286,
+    "label": "In 286 decks, 0% of 3395771 decks",
+    "num_decks": 286,
+    "potential_decks": 3395771
+  },
+  {
+    "name": "Iron Star",
+    "sanitized": "iron-star",
+    "sanitized_wo": "iron-star",
+    "url": "/cards/iron-star",
+    "inclusion": 283,
+    "label": "In 283 decks, 0% of 6719784 decks",
+    "num_decks": 283,
+    "potential_decks": 6719784
+  },
+  {
+    "name": "Web",
+    "sanitized": "web",
+    "sanitized_wo": "web",
+    "url": "/cards/web",
+    "inclusion": 276,
+    "label": "In 276 decks, 0% of 3114032 decks",
+    "num_decks": 276,
+    "potential_decks": 3114032
+  },
+  {
+    "name": "Weakness",
+    "sanitized": "weakness",
+    "sanitized_wo": "weakness",
+    "url": "/cards/weakness",
+    "inclusion": 273,
+    "label": "In 273 decks, 0% of 3395771 decks",
+    "num_decks": 273,
+    "potential_decks": 3395771
+  },
+  {
+    "name": "Wooden Sphere",
+    "sanitized": "wooden-sphere",
+    "sanitized_wo": "wooden-sphere",
+    "url": "/cards/wooden-sphere",
+    "inclusion": 270,
+    "label": "In 270 decks, 0% of 6719784 decks",
+    "num_decks": 270,
+    "potential_decks": 6719784
+  },
+  {
+    "name": "Power Leak",
+    "sanitized": "power-leak",
+    "sanitized_wo": "power-leak",
+    "url": "/cards/power-leak",
+    "inclusion": 256,
+    "label": "In 256 decks, 0% of 3310892 decks",
+    "num_decks": 256,
+    "potential_decks": 3310892
+  },
+  {
+    "name": "Hurloon Minotaur",
+    "sanitized": "hurloon-minotaur",
+    "sanitized_wo": "hurloon-minotaur",
+    "url": "/cards/hurloon-minotaur",
+    "inclusion": 254,
+    "label": "In 254 decks, 0% of 3313588 decks",
+    "num_decks": 254,
+    "potential_decks": 3313588
+  },
+  {
+    "name": "Natural Selection",
+    "sanitized": "natural-selection",
+    "sanitized_wo": "natural-selection",
+    "url": "/cards/natural-selection",
+    "inclusion": 249,
+    "label": "In 249 decks, 0% of 3114032 decks",
+    "num_decks": 249,
+    "potential_decks": 3114032
+  },
+  {
+    "name": "Ironroot Treefolk",
+    "sanitized": "ironroot-treefolk",
+    "sanitized_wo": "ironroot-treefolk",
+    "url": "/cards/ironroot-treefolk",
+    "inclusion": 242,
+    "label": "In 242 decks, 0% of 3114032 decks",
+    "num_decks": 242,
+    "potential_decks": 3114032
+  },
+  {
+    "name": "Thicket Basilisk",
+    "sanitized": "thicket-basilisk",
+    "sanitized_wo": "thicket-basilisk",
+    "url": "/cards/thicket-basilisk",
+    "inclusion": 233,
+    "label": "In 233 decks, 0% of 3114032 decks",
+    "num_decks": 233,
+    "potential_decks": 3114032
+  },
+  {
+    "name": "Clockwork Beast",
+    "sanitized": "clockwork-beast",
+    "sanitized_wo": "clockwork-beast",
+    "url": "/cards/clockwork-beast",
+    "inclusion": 227,
+    "label": "In 227 decks, 0% of 6719784 decks",
+    "num_decks": 227,
+    "potential_decks": 6719784
+  },
+  {
+    "name": "Feedback",
+    "sanitized": "feedback",
+    "sanitized_wo": "feedback",
+    "url": "/cards/feedback",
+    "inclusion": 225,
+    "label": "In 225 decks, 0% of 3310892 decks",
+    "num_decks": 225,
+    "potential_decks": 3310892
+  },
+  {
+    "name": "Volcanic Eruption",
+    "sanitized": "volcanic-eruption",
+    "sanitized_wo": "volcanic-eruption",
+    "url": "/cards/volcanic-eruption",
+    "inclusion": 213,
+    "label": "In 213 decks, 0% of 3310892 decks",
+    "num_decks": 213,
+    "potential_decks": 3310892
+  },
+  {
+    "name": "Sea Serpent",
+    "sanitized": "sea-serpent",
+    "sanitized_wo": "sea-serpent",
+    "url": "/cards/sea-serpent",
+    "inclusion": 204,
+    "label": "In 204 decks, 0% of 3310892 decks",
+    "num_decks": 204,
+    "potential_decks": 3310892
+  },
+  {
+    "name": "Lance",
+    "sanitized": "lance",
+    "sanitized_wo": "lance",
+    "url": "/cards/lance",
+    "inclusion": 203,
+    "label": "In 203 decks, 0% of 3114990 decks",
+    "num_decks": 203,
+    "potential_decks": 3114990
+  },
+  {
+    "name": "Cyclopean Tomb",
+    "sanitized": "cyclopean-tomb",
+    "sanitized_wo": "cyclopean-tomb",
+    "url": "/cards/cyclopean-tomb",
+    "inclusion": 202,
+    "label": "In 202 decks, 0% of 6719784 decks",
+    "num_decks": 202,
+    "potential_decks": 6719784
+  },
+  {
+    "name": "Warp Artifact",
+    "sanitized": "warp-artifact",
+    "sanitized_wo": "warp-artifact",
+    "url": "/cards/warp-artifact",
+    "inclusion": 199,
+    "label": "In 199 decks, 0% of 3395771 decks",
+    "num_decks": 199,
+    "potential_decks": 3395771
+  },
+  {
+    "name": "Dwarven Demolition Team",
+    "sanitized": "dwarven-demolition-team",
+    "sanitized_wo": "dwarven-demolition-team",
+    "url": "/cards/dwarven-demolition-team",
+    "inclusion": 181,
+    "label": "In 181 decks, 0% of 3313588 decks",
+    "num_decks": 181,
+    "potential_decks": 3313588
+  },
+  {
+    "name": "Phantom Monster",
+    "sanitized": "phantom-monster",
+    "sanitized_wo": "phantom-monster",
+    "url": "/cards/phantom-monster",
+    "inclusion": 179,
+    "label": "In 179 decks, 0% of 3310892 decks",
+    "num_decks": 179,
+    "potential_decks": 3310892
+  },
+  {
+    "name": "Living Artifact",
+    "sanitized": "living-artifact",
+    "sanitized_wo": "living-artifact",
+    "url": "/cards/living-artifact",
+    "inclusion": 165,
+    "label": "In 165 decks, 0% of 3114032 decks",
+    "num_decks": 165,
+    "potential_decks": 3114032
+  },
+  {
+    "name": "Scathe Zombies",
+    "sanitized": "scathe-zombies",
+    "sanitized_wo": "scathe-zombies",
+    "url": "/cards/scathe-zombies",
+    "inclusion": 159,
+    "label": "In 159 decks, 0% of 3395771 decks",
+    "num_decks": 159,
+    "potential_decks": 3395771
+  },
+  {
+    "name": "Wanderlust",
+    "sanitized": "wanderlust",
+    "sanitized_wo": "wanderlust",
+    "url": "/cards/wanderlust",
+    "inclusion": 157,
+    "label": "In 157 decks, 0% of 3114032 decks",
+    "num_decks": 157,
+    "potential_decks": 3114032
+  },
+  {
+    "name": "Hill Giant",
+    "sanitized": "hill-giant",
+    "sanitized_wo": "hill-giant",
+    "url": "/cards/hill-giant",
+    "inclusion": 156,
+    "label": "In 156 decks, 0% of 3313588 decks",
+    "num_decks": 156,
+    "potential_decks": 3313588
+  },
+  {
+    "name": "Samite Healer",
+    "sanitized": "samite-healer",
+    "sanitized_wo": "samite-healer",
+    "url": "/cards/samite-healer",
+    "inclusion": 156,
+    "label": "In 156 decks, 0% of 3114990 decks",
+    "num_decks": 156,
+    "potential_decks": 3114990
+  },
+  {
+    "name": "Granite Gargoyle",
+    "sanitized": "granite-gargoyle",
+    "sanitized_wo": "granite-gargoyle",
+    "url": "/cards/granite-gargoyle",
+    "inclusion": 152,
+    "label": "In 152 decks, 0% of 3313588 decks",
+    "num_decks": 152,
+    "potential_decks": 3313588
+  },
+  {
+    "name": "Obsianus Golem",
+    "sanitized": "obsianus-golem",
+    "sanitized_wo": "obsianus-golem",
+    "url": "/cards/obsianus-golem",
+    "inclusion": 148,
+    "label": "In 148 decks, 0% of 6719784 decks",
+    "num_decks": 148,
+    "potential_decks": 6719784
+  },
+  {
+    "name": "Farmstead",
+    "sanitized": "farmstead",
+    "sanitized_wo": "farmstead",
+    "url": "/cards/farmstead",
+    "inclusion": 141,
+    "label": "In 141 decks, 0% of 3114990 decks",
+    "num_decks": 141,
+    "potential_decks": 3114990
+  },
+  {
+    "name": "Stone Giant",
+    "sanitized": "stone-giant",
+    "sanitized_wo": "stone-giant",
+    "url": "/cards/stone-giant",
+    "inclusion": 140,
+    "label": "In 140 decks, 0% of 3313588 decks",
+    "num_decks": 140,
+    "potential_decks": 3313588
+  },
+  {
+    "name": "War Mammoth",
+    "sanitized": "war-mammoth",
+    "sanitized_wo": "war-mammoth",
+    "url": "/cards/war-mammoth",
+    "inclusion": 140,
+    "label": "In 140 decks, 0% of 3114032 decks",
+    "num_decks": 140,
+    "potential_decks": 3114032
+  },
+  {
+    "name": "Earth Elemental",
+    "sanitized": "earth-elemental",
+    "sanitized_wo": "earth-elemental",
+    "url": "/cards/earth-elemental",
+    "inclusion": 121,
+    "label": "In 121 decks, 0% of 3313588 decks",
+    "num_decks": 121,
+    "potential_decks": 3313588
+  },
+  {
+    "name": "Sedge Troll",
+    "sanitized": "sedge-troll",
+    "sanitized_wo": "sedge-troll",
+    "url": "/cards/sedge-troll",
+    "inclusion": 119,
+    "label": "In 119 decks, 0% of 1517517 decks",
+    "num_decks": 119,
+    "potential_decks": 1517517
+  },
+  {
+    "name": "Uthden Troll",
+    "sanitized": "uthden-troll",
+    "sanitized_wo": "uthden-troll",
+    "url": "/cards/uthden-troll",
+    "inclusion": 117,
+    "label": "In 117 decks, 0% of 3313588 decks",
+    "num_decks": 117,
+    "potential_decks": 3313588
+  },
+  {
+    "name": "Deathlace",
+    "sanitized": "deathlace",
+    "sanitized_wo": "deathlace",
+    "url": "/cards/deathlace",
+    "inclusion": 116,
+    "label": "In 116 decks, 0% of 3395771 decks",
+    "num_decks": 116,
+    "potential_decks": 3395771
+  },
+  {
+    "name": "Jade Statue",
+    "sanitized": "jade-statue",
+    "sanitized_wo": "jade-statue",
+    "url": "/cards/jade-statue",
+    "inclusion": 115,
+    "label": "In 115 decks, 0% of 6719784 decks",
+    "num_decks": 115,
+    "potential_decks": 6719784
+  },
+  {
+    "name": "Celestial Prism",
+    "sanitized": "celestial-prism",
+    "sanitized_wo": "celestial-prism",
+    "url": "/cards/celestial-prism",
+    "inclusion": 110,
+    "label": "In 110 decks, 0% of 6719784 decks",
+    "num_decks": 110,
+    "potential_decks": 6719784
+  },
+  {
+    "name": "Personal Incarnation",
+    "sanitized": "personal-incarnation",
+    "sanitized_wo": "personal-incarnation",
+    "url": "/cards/personal-incarnation",
+    "inclusion": 107,
+    "label": "In 107 decks, 0% of 3114990 decks",
+    "num_decks": 107,
+    "potential_decks": 3114990
+  },
+  {
+    "name": "Water Elemental",
+    "sanitized": "water-elemental",
+    "sanitized_wo": "water-elemental",
+    "url": "/cards/water-elemental",
+    "inclusion": 102,
+    "label": "In 102 decks, 0% of 3310892 decks",
+    "num_decks": 102,
+    "potential_decks": 3310892
+  },
+  {
+    "name": "Chaoslace",
+    "sanitized": "chaoslace",
+    "sanitized_wo": "chaoslace",
+    "url": "/cards/chaoslace",
+    "inclusion": 94,
+    "label": "In 94 decks, 0% of 3313588 decks",
+    "num_decks": 94,
+    "potential_decks": 3313588
+  }
+]

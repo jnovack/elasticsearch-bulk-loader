@@ -1,0 +1,17 @@
+{
+  "settings": {
+    "index": {
+      "analysis": {
+        "normalizer": {
+          "case_insensitive_normalizer": {
+            "type": "custom",
+            "char_filter": [],
+            "filter": "lowercase"
+          }
+        }
+      },
+      "number_of_shards": "2",
+      "number_of_replicas": "1"
+    }
+  }
+}

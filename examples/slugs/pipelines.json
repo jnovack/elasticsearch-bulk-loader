@@ -1,0 +1,13 @@
+{
+  "calc-inclusion-percent": {
+    "description": "Compute inclusion_percent as num_decks / potential_decks",
+    "processors": [
+      {
+        "script": {
+          "lang": "painless",
+          "source": "if (ctx.num_decks != null && ctx.potential_decks != null && ctx.potential_decks != 0) { ctx.inclusion_percent = (double) ctx.num_decks * 100 / (double) ctx.potential_decks; }"
+        }
+      }
+    ]
+  }
+}

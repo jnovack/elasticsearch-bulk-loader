@@ -1,0 +1,82 @@
+{
+  "mappings": {
+    "properties": {
+      "cards": {
+        "properties": {
+          "name": {
+            "type": "text",
+            "fields": {
+              "keyword": {
+                "type": "keyword",
+                "ignore_above": 256
+              }
+            }
+          },
+          "url": {
+            "type": "text",
+            "fields": {
+              "keyword": {
+                "type": "keyword",
+                "ignore_above": 256
+              }
+            }
+          }
+        }
+      },
+      "id": {
+        "type": "keyword"
+      },
+      "inclusion": {
+        "type": "long"
+      },
+      "inclusion_percent": {
+        "type": "float"
+      },
+      "is_partner": {
+        "type": "boolean"
+      },
+      "label": {
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        }
+      },
+      "name": {
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        }
+      },
+      "names": {
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        }
+      },
+      "num_decks": {
+        "type": "long"
+      },
+      "potential_decks": {
+        "type": "long"
+      },
+      "sanitized": {
+        "type": "keyword"
+      },
+      "sanitized_wo": {
+        "type": "keyword"
+      },
+      "url": {
+        "type": "keyword"
+      }
+    }
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "enrich-from-slugs": {
+    "description": "Enrich cards with slug stats by card name using the slugs-by-name enrich policy.",
+    "processors": [
+      {
+        "script": {
+          "lang": "painless",
+          "source": "if (ctx.card_faces instanceof List && ctx.card_faces.size() > 0 && ctx.card_faces[0] instanceof Map && ctx.card_faces[0].name != null) { ctx._slug_lookup_name = ctx.card_faces[0].name; } else if (ctx.name != null) { ctx._slug_lookup_name = ctx.name; }"
+        }
+      },
+      {
+        "enrich": {
+          "policy_name": "slugs-by-name",
+          "field": "_slug_lookup_name",
+          "target_field": "_slug_match",
+          "max_matches": 1,
+          "ignore_missing": true
+        }
+      },
+      {
+        "script": {
+          "lang": "painless",
+          "source": "if (ctx._slug_match != null) { if (!(ctx.slugs instanceof Map)) { ctx.slugs = [:]; } if (ctx._slug_match.sanitized != null) { ctx.slugs.name = ctx._slug_match.sanitized; } if (ctx._slug_match.inclusion != null) { ctx.slugs.inclusion = ctx._slug_match.inclusion; } if (ctx._slug_match.inclusion_percent != null) { ctx.slugs.inclusion_percent = ctx._slug_match.inclusion_percent; } if (ctx._slug_match.potential_decks != null) { ctx.slugs.potential_decks = ctx._slug_match.potential_decks; } } ctx.remove('_slug_lookup_name'); ctx.remove('_slug_match');"
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,449 @@
+{
+  "mappings": {
+    "properties": {
+      "all_parts": {
+        "properties": {
+          "component": {
+            "type": "keyword"
+          },
+          "id": {
+            "type": "keyword"
+          },
+          "name": {
+            "type": "text",
+            "fields": {
+              "keyword": {
+                "type": "keyword",
+                "ignore_above": 256
+              }
+            }
+          },
+          "object": {
+            "type": "keyword"
+          },
+          "type_line": {
+            "type": "text",
+            "fields": {
+              "keyword": {
+                "type": "keyword",
+                "ignore_above": 256
+              }
+            }
+          },
+          "uri": {
+            "type": "object",
+            "enabled": false
+          }
+        }
+      },
+      "arena_id": {
+        "type": "long"
+      },
+      "artist": {
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        }
+      },
+      "artist_ids": {
+        "type": "keyword",
+        "ignore_above": 256
+      },
+      "attraction_lights": {
+        "type": "long"
+      },
+      "booster": {
+        "type": "boolean"
+      },
+      "border_color": {
+        "type": "keyword"
+      },
+      "card_back_id": {
+        "type": "keyword"
+      },
+      "card_faces": {
+        "type": "object",
+        "enabled": false
+      },
+      "cardmarket_id": {
+        "type": "long"
+      },
+      "cmc": {
+        "type": "float"
+      },
+      "collector_number": {
+        "type": "keyword"
+      },
+      "color_identity": {
+        "type": "keyword"
+      },
+      "color_indicator": {
+        "type": "keyword"
+      },
+      "colors": {
+        "type": "keyword"
+      },
+      "content_warning": {
+        "type": "boolean"
+      },
+      "defense": {
+        "type": "object",
+        "enabled": false
+      },
+      "digital": {
+        "type": "boolean"
+      },
+      "edhrec_rank": {
+        "type": "long"
+      },
+      "finishes": {
+        "type": "keyword"
+      },
+      "flavor_name": {
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        }
+      },
+      "flavor_text": {
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        }
+      },
+      "foil": {
+        "type": "boolean"
+      },
+      "frame": {
+        "type": "keyword"
+      },
+      "frame_effects": {
+        "type": "keyword"
+      },
+      "full_art": {
+        "type": "boolean"
+      },
+      "game_changer": {
+        "type": "boolean"
+      },
+      "games": {
+        "type": "keyword"
+      },
+      "hand_modifier": {
+        "type": "object",
+        "enabled": false
+      },
+      "highres_image": {
+        "type": "boolean"
+      },
+      "id": {
+        "type": "keyword",
+        "ignore_above": 256
+      },
+      "illustration_id": {
+        "type": "keyword",
+        "ignore_above": 256
+      },
+      "image_status": {
+        "type": "keyword"
+      },
+      "image_uris": {
+        "type": "object",
+        "enabled": false
+      },
+      "keywords": {
+        "type": "keyword"
+      },
+      "lang": {
+        "type": "keyword"
+      },
+      "layout": {
+        "type": "keyword"
+      },
+      "legalities": {
+        "properties": {
+          "alchemy": { "type": "keyword" },
+          "brawl": { "type": "keyword" },
+          "commander": { "type": "keyword" },
+          "duel": { "type": "keyword" },
+          "explorer": { "type": "keyword" },
+          "future": { "type": "keyword" },
+          "gladiator": { "type": "keyword" },
+          "historic": { "type": "keyword" },
+          "legacy": { "type": "keyword" },
+          "modern": { "type": "keyword" },
+          "oathbreaker": { "type": "keyword" },
+          "oldschool": { "type": "keyword" },
+          "pauper": { "type": "keyword" },
+          "paupercommander": { "type": "keyword" },
+          "penny": { "type": "keyword" },
+          "pioneer": { "type": "keyword" },
+          "predh": { "type": "keyword" },
+          "premodern": { "type": "keyword" },
+          "standard": { "type": "keyword" },
+          "standardbrawl": { "type": "keyword" },
+          "timeless": { "type": "keyword" },
+          "vintage": { "type": "keyword" }
+        }
+      },
+      "life_modifier": {
+        "type": "object",
+        "enabled": false
+      },
+      "loyalty": {
+        "type": "keyword"
+      },
+      "mana_cost": {
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        }
+      },
+      "mtgo_foil_id": {
+        "type": "long"
+      },
+      "mtgo_id": {
+        "type": "long"
+      },
+      "multiverse_ids": {
+        "type": "long"
+      },
+      "name": {
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        }
+      },
+      "nonfoil": {
+        "type": "boolean"
+      },
+      "object": {
+        "type": "keyword"
+      },
+      "oracle_id": {
+        "type": "keyword",
+        "ignore_above": 256
+      },
+      "oracle_text": {
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        }
+      },
+      "oversized": {
+        "type": "boolean"
+      },
+      "penny_rank": {
+        "type": "long"
+      },
+      "power": {
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        }
+      },
+      "preview": {
+        "type": "object",
+        "enabled": false
+      },
+      "prices": {
+        "properties": {
+          "eur": {
+            "type": "float"
+          },
+          "eur_foil": {
+            "type": "float"
+          },
+          "tix": {
+            "type": "float"
+          },
+          "usd": {
+            "type": "float"
+          },
+          "usd_etched": {
+            "type": "float"
+          },
+          "usd_foil": {
+            "type": "float"
+          }
+        }
+      },
+      "printed_name": {
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        }
+      },
+      "printed_text": {
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        }
+      },
+      "printed_type_line": {
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        }
+      },
+      "prints_search_uri": {
+        "type": "object",
+        "enabled": false
+      },
+      "produced_mana": {
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        }
+      },
+      "promo": {
+        "type": "boolean"
+      },
+      "promo_types": {
+        "type": "keyword"
+      },
+      "purchase_uris": {
+        "type": "object",
+        "enabled": false
+      },
+      "rarity": {
+        "type": "keyword"
+      },
+      "related_uris": {
+        "type": "object",
+        "enabled": false
+      },
+      "released_at": {
+        "type": "date"
+      },
+      "reprint": {
+        "type": "boolean"
+      },
+      "reserved": {
+        "type": "boolean"
+      },
+      "rulings_uri": {
+        "type": "object",
+        "enabled": false
+      },
+      "scryfall_set_uri": {
+        "type": "object",
+        "enabled": false
+      },
+      "scryfall_uri": {
+        "type": "object",
+        "enabled": false
+      },
+      "security_stamp": {
+        "type": "keyword"
+      },
+      "slugs": {
+        "properties": {
+          "inclusion": {
+            "type": "long"
+          },
+          "inclusion_percent": {
+            "type": "float"
+          },
+          "name": {
+            "type": "keyword"
+          },
+          "potential_decks": {
+            "type": "long"
+          }
+        }
+      },
+      "set": {
+        "type": "keyword"
+      },
+      "set_id": {
+        "type": "keyword"
+      },
+      "set_name": {
+        "type": "keyword",
+        "ignore_above": 256
+      },
+      "set_search_uri": {
+        "type": "object",
+        "enabled": false
+      },
+      "set_type": {
+        "type": "keyword"
+      },
+      "set_uri": {
+        "type": "object",
+        "enabled": false
+      },
+      "story_spotlight": {
+        "type": "boolean"
+      },
+      "tcgplayer_etched_id": {
+        "type": "long"
+      },
+      "tcgplayer_id": {
+        "type": "long"
+      },
+      "textless": {
+        "type": "boolean"
+      },
+      "toughness": {
+        "type": "keyword"
+      },
+      "type_line": {
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        }
+      },
+      "uri": {
+        "type": "object",
+        "enabled": false
+      },
+      "variation": {
+        "type": "boolean"
+      },
+      "variation_of": {
+        "type": "keyword"
+      },
+      "watermark": {
+        "type": "keyword"
+      }
+    }
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "slugs-by-name": {
+    "match": {
+      "indices": "${INDEX}",
+      "match_field": "name",
+      "enrich_fields": [
+        "sanitized",
+        "inclusion",
+        "inclusion_percent",
+        "potential_decks"
+      ]
+    }
+  }
+}
