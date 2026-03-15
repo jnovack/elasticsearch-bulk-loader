@@ -24,6 +24,7 @@ KEEP_ENV=1 ./test/run.sh
 
 The fixture validates two things:
 
+- The first pipeline declared for each index becomes `index.default_pipeline` when the settings file leaves it unset.
 - Source documents in `e2e-source-index` have `calculated_value` and `source_label` populated by a painless ingest script.
 - Target documents in `e2e-target-index` are enriched from `e2e-source-policy` and contain the calculated source fields.
 

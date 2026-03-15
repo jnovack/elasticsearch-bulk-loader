@@ -9,5 +9,16 @@
         }
       }
     ]
+  },
+  "e2e-index1-secondary": {
+    "description": "Secondary source pipeline that is not the default pipeline",
+    "processors": [
+      {
+        "set": {
+          "field": "secondary_pipeline_ran",
+          "value": true
+        }
+      }
+    ]
   }
 }

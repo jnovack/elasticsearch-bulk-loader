@@ -8,7 +8,7 @@ A Go CLI for end-to-end loading of JSON documents into Elasticsearch-compatible 
 
 - Create a new index or work against an existing one with `-add`, `-delete`, and `-flush`
 - Load index settings and mappings from JSON files during index creation
-- Create or update one or more ingest pipelines from a keyed JSON definition file
+- Create or update one or more ingest pipelines from a keyed JSON definition file, using the first declared pipeline as the default when settings do not already specify one
 - Create or update one or more enrich policies from a keyed JSON definition file
 - Bulk load JSON array documents with configurable batch sizes
 - Run all enrich policies or only a selected comma-separated subset with `-enrich`
@@ -135,6 +135,8 @@ go run cmd/es-bulk-loader/main.go \
 Unknown policy names are logged as warnings and skipped.
 
 Definition file formats are documented in [docs/PIPELINES.md](docs/PIPELINES.md) and [docs/POLICIES.md](docs/POLICIES.md).
+
+When `-pipelines` is supplied during index creation, the loader preserves the JSON key order from the pipeline file. If the settings file does not already define `index.default_pipeline`, the first declared pipeline becomes the index default pipeline automatically.
 
 Definition files support variable expansion before they are parsed. `${INDEX}` is populated from the current `-index` value, and other placeholders fall back to environment variables when present.
 

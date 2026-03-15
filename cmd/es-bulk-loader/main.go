@@ -10,6 +10,7 @@ import (
 	"os"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -209,6 +210,10 @@ func main() {
 	variables := buildTemplateVariables(*index)
 	pipelineDefinitions, pipelineNames := readNamedDefinitions(*pipelinesFile, "pipeline", variables)
 	policyDefinitions, policyNames := readNamedDefinitions(*policiesFile, "policy", variables)
+	defaultPipeline := ""
+	if len(pipelineNames) > 0 {
+		defaultPipeline = pipelineNames[0]
+	}
 
 	// Determine if index exists
 	exists, err := indexExists(es, *index)
@@ -263,7 +268,7 @@ func main() {
 
 	// Create index if needed
 	if !exists {
-		body := buildCreateIndexBody(*settingsFile, *mappingsFile, variables)
+		body := buildCreateIndexBody(*settingsFile, *mappingsFile, defaultPipeline, variables)
 		res, err := es.Indices.Create(*index, es.Indices.Create.WithBody(strings.NewReader(body)))
 		checkErr("creating index", err)
 		defer res.Body.Close()
@@ -406,11 +411,51 @@ func flushAndCheck(es *elasticsearch.Client, index string) {
 	}
 }
 
-func buildCreateIndexBody(settingsFile, mappingsFile string, variables templateVariables) string {
-	settings := normalizeIndexSection(settingsFile, "settings", variables)
+func buildCreateIndexBody(settingsFile, mappingsFile, defaultPipeline string, variables templateVariables) string {
+	settings := normalizeIndexSettings(settingsFile, defaultPipeline, variables)
 	mappings := normalizeIndexSection(mappingsFile, "mappings", variables)
 
 	return fmt.Sprintf(`{"settings": %s, "mappings": %s}`, settings, mappings)
+}
+
+func normalizeIndexSettings(path, defaultPipeline string, variables templateVariables) string {
+	settings := make(map[string]json.RawMessage)
+	if path != "" {
+		content, err := readTemplatedFile(path, variables)
+		if err != nil {
+			log.Fatal().Err(err).Str("path", path).Msg("Reading settings file")
+		}
+
+		var raw map[string]json.RawMessage
+		if err := json.Unmarshal(content, &raw); err != nil {
+			log.Fatal().Err(err).Str("path", path).Msg("Parsing settings file")
+		}
+
+		source := raw
+		if nested, ok := raw["settings"]; ok {
+			if err := json.Unmarshal(nested, &source); err != nil {
+				log.Fatal().Err(err).Str("path", path).Msg("Parsing nested settings file")
+			}
+		}
+
+		for key, value := range source {
+			settings[key] = value
+		}
+	}
+
+	if defaultPipeline != "" {
+		if _, ok := settings["index.default_pipeline"]; !ok {
+			settings["index.default_pipeline"] = json.RawMessage(strconv.Quote(defaultPipeline))
+			log.Info().Str("pipeline", defaultPipeline).Msg("Using first declared pipeline as index.default_pipeline")
+		}
+	}
+
+	normalized, err := json.Marshal(settings)
+	if err != nil {
+		log.Fatal().Err(err).Str("path", path).Msg("Serializing settings")
+	}
+
+	return string(normalized)
 }
 
 func normalizeIndexSection(path, section string, variables templateVariables) string {
@@ -445,16 +490,42 @@ func readNamedDefinitions(path, resourceType string, variables templateVariables
 		log.Fatal().Err(err).Str("path", path).Msgf("Reading %s definitions file", resourceType)
 	}
 
-	var definitions namedDefinitions
-	if err := json.Unmarshal(content, &definitions); err != nil {
+	decoder := json.NewDecoder(strings.NewReader(string(content)))
+	token, err := decoder.Token()
+	if err != nil {
 		log.Fatal().Err(err).Str("path", path).Msgf("Parsing %s definitions file", resourceType)
 	}
 
-	names := make([]string, 0, len(definitions))
-	for name := range definitions {
+	delim, ok := token.(json.Delim)
+	if !ok || delim != '{' {
+		log.Fatal().Str("path", path).Msgf("%s definitions file must contain a JSON object", resourceType)
+	}
+
+	definitions := make(namedDefinitions)
+	names := make([]string, 0)
+	for decoder.More() {
+		keyToken, err := decoder.Token()
+		if err != nil {
+			log.Fatal().Err(err).Str("path", path).Msgf("Reading %s definition name", resourceType)
+		}
+
+		name, ok := keyToken.(string)
+		if !ok {
+			log.Fatal().Str("path", path).Msgf("Invalid %s definition name", resourceType)
+		}
+
+		var definition json.RawMessage
+		if err := decoder.Decode(&definition); err != nil {
+			log.Fatal().Err(err).Str("path", path).Msgf("Parsing %s definition body", resourceType)
+		}
+
+		definitions[name] = definition
 		names = append(names, name)
 	}
-	slices.Sort(names)
+
+	if _, err := decoder.Token(); err != nil {
+		log.Fatal().Err(err).Str("path", path).Msgf("Parsing %s definitions file", resourceType)
+	}
 
 	return definitions, names
 }

@@ -71,6 +71,7 @@ run_loader \
   -policies /fixtures/index1-policies.json \
   -data /fixtures/index1-data.json \
   -batch 2 \
+  -id lookup_id \
   -delete \
   -enrich
 
