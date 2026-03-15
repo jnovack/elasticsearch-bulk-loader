@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"encoding/json"
@@ -272,6 +273,16 @@ func main() {
 		res, err := es.Indices.Create(*index, es.Indices.Create.WithBody(strings.NewReader(body)))
 		checkErr("creating index", err)
 		defer res.Body.Close()
+		if res.IsError() {
+			responseBody, _ := io.ReadAll(res.Body)
+			log.Fatal().
+				Str("index", *index).
+				Int("status_code", res.StatusCode).
+				Str("request_body", body).
+				Str("body", string(responseBody)).
+				Msg("Failed to create index")
+		}
+		waitForIndex(es, *index)
 		log.Info().Str("index", *index).Msg("Index created")
 	}
 
@@ -357,7 +368,7 @@ func main() {
 
 	if enrich.enabled {
 		refreshIndex(es, *index)
-		runEnrichPolicies(es, enrich)
+		runEnrichPolicies(es, enrich, policyNames)
 	}
 
 }
@@ -383,6 +394,19 @@ func indexExists(es *elasticsearch.Client, index string) (bool, error) {
 	default:
 		return false, fmt.Errorf("unexpected status code %d", res.StatusCode)
 	}
+}
+
+func waitForIndex(es *elasticsearch.Client, index string) {
+	for i := 0; i < 20; i++ {
+		exists, err := indexExists(es, index)
+		checkErr("waiting for index creation", err)
+		if exists {
+			return
+		}
+		time.Sleep(250 * time.Millisecond)
+	}
+
+	log.Fatal().Str("index", index).Msg("Index create was acknowledged but the index did not become visible")
 }
 
 func deleteAndCheck(es *elasticsearch.Client, index string) {
@@ -433,19 +457,34 @@ func normalizeIndexSettings(path, defaultPipeline string, variables templateVari
 
 		source := raw
 		if nested, ok := raw["settings"]; ok {
+			source = nil
 			if err := json.Unmarshal(nested, &source); err != nil {
 				log.Fatal().Err(err).Str("path", path).Msg("Parsing nested settings file")
 			}
 		}
 
 		for key, value := range source {
-			settings[key] = value
+			if key == "index" {
+				var nested map[string]json.RawMessage
+				if err := json.Unmarshal(value, &nested); err == nil {
+					for nestedKey, nestedValue := range nested {
+						normalizedKey := normalizeSettingKey(nestedKey)
+						if _, exists := settings[normalizedKey]; exists {
+							continue
+						}
+						settings[normalizedKey] = nestedValue
+					}
+					continue
+				}
+			}
+
+			settings[normalizeSettingKey(key)] = value
 		}
 	}
 
 	if defaultPipeline != "" {
-		if _, ok := settings["index.default_pipeline"]; !ok {
-			settings["index.default_pipeline"] = json.RawMessage(strconv.Quote(defaultPipeline))
+		if _, ok := settings["default_pipeline"]; !ok {
+			settings["default_pipeline"] = json.RawMessage(strconv.Quote(defaultPipeline))
 			log.Info().Str("pipeline", defaultPipeline).Msg("Using first declared pipeline as index.default_pipeline")
 		}
 	}
@@ -456,6 +495,10 @@ func normalizeIndexSettings(path, defaultPipeline string, variables templateVari
 	}
 
 	return string(normalized)
+}
+
+func normalizeSettingKey(key string) string {
+	return strings.TrimPrefix(key, "index.")
 }
 
 func normalizeIndexSection(path, section string, variables templateVariables) string {
@@ -615,25 +658,49 @@ func deletePipelines(es *elasticsearch.Client, names []string) {
 
 func createPolicies(es *elasticsearch.Client, definitions namedDefinitions, names []string) {
 	for _, name := range names {
-		res, err := es.EnrichPutPolicy(
-			name,
-			strings.NewReader(string(definitions[name])),
-			es.EnrichPutPolicy.WithContext(context.Background()),
-		)
-		checkErr("creating enrich policy", err)
+		for attempt := 1; attempt <= 5; attempt++ {
+			res, err := es.EnrichPutPolicy(
+				name,
+				strings.NewReader(string(definitions[name])),
+				es.EnrichPutPolicy.WithContext(context.Background()),
+				es.EnrichPutPolicy.WithHeader(map[string]string{
+					"Content-Type": "application/json",
+					"Accept":       "application/json",
+				}),
+			)
+			checkErr("creating enrich policy", err)
 
-		if res.IsError() {
-			body, _ := io.ReadAll(res.Body)
+			if res.IsError() {
+				body, _ := io.ReadAll(res.Body)
+				res.Body.Close()
+				if isUnsupportedEnrichAPI(res.StatusCode, body) {
+					log.Warn().
+						Int("status_code", res.StatusCode).
+						Str("body", string(body)).
+						Msg("Enrich policy endpoint returned a generic 404; check proxy or routing for /_enrich/policy and confirm this URL matches the backend used by Dev Tools")
+					return
+				}
+				if hasElasticsearchErrorType(body, "index_not_found_exception") && attempt < 5 {
+					log.Warn().
+						Str("policy", name).
+						Int("attempt", attempt).
+						Int("status_code", res.StatusCode).
+						Str("body", string(body)).
+						Msg("Source index for enrich policy is not visible yet; retrying enrich policy creation")
+					time.Sleep(500 * time.Millisecond)
+					continue
+				}
+				log.Fatal().
+					Str("policy", name).
+					Int("status_code", res.StatusCode).
+					Str("body", string(body)).
+					Msg("Failed to create enrich policy")
+			}
 			res.Body.Close()
-			log.Fatal().
-				Str("policy", name).
-				Int("status_code", res.StatusCode).
-				Str("body", string(body)).
-				Msg("Failed to create enrich policy")
-		}
-		res.Body.Close()
 
-		log.Info().Str("policy", name).Msg("Enrich policy created or updated")
+			log.Info().Str("policy", name).Msg("Enrich policy created or updated")
+			break
+		}
 	}
 }
 
@@ -642,11 +709,22 @@ func deletePolicies(es *elasticsearch.Client, names []string) {
 		res, err := es.EnrichDeletePolicy(
 			name,
 			es.EnrichDeletePolicy.WithContext(context.Background()),
+			es.EnrichDeletePolicy.WithHeader(map[string]string{
+				"Accept": "application/json",
+			}),
 		)
 		checkErr("deleting enrich policy", err)
 
 		if res.StatusCode == http.StatusNotFound {
+			body, _ := io.ReadAll(res.Body)
 			res.Body.Close()
+			if isUnsupportedEnrichAPI(res.StatusCode, body) {
+				log.Warn().
+					Int("status_code", res.StatusCode).
+					Str("body", string(body)).
+					Msg("Enrich policy endpoint returned a generic 404; check proxy or routing for /_enrich/policy and confirm this URL matches the backend used by Dev Tools")
+				return
+			}
 			log.Info().Str("policy", name).Msg("Enrich policy does not exist. Nothing to delete.")
 			continue
 		}
@@ -691,14 +769,17 @@ func refreshIndex(es *elasticsearch.Client, index string) {
 	log.Info().Str("index", index).Msg("Index refreshed before enrich execution")
 }
 
-func runEnrichPolicies(es *elasticsearch.Client, enrich *enrichFlagValue) {
-	availablePolicies := getEnrichPolicies(es)
+func runEnrichPolicies(es *elasticsearch.Client, enrich *enrichFlagValue, declared []string) {
+	availablePolicies, supported := getEnrichPolicies(es)
+	if !supported {
+		return
+	}
 	if len(availablePolicies) == 0 {
 		log.Warn().Msg("No enrich policies found; skipping enrich execution")
 		return
 	}
 
-	targets, missing := resolveEnrichTargets(enrich, availablePolicies)
+	targets, missing := resolveEnrichTargets(enrich, availablePolicies, declared)
 	for _, policy := range missing {
 		log.Warn().Str("policy", policy).Msg("Enrich policy not found; skipping")
 	}
@@ -736,13 +817,25 @@ func runEnrichPolicies(es *elasticsearch.Client, enrich *enrichFlagValue) {
 		Msg("Enrich policy execution completed")
 }
 
-func getEnrichPolicies(es *elasticsearch.Client) []string {
-	res, err := es.EnrichGetPolicy(es.EnrichGetPolicy.WithContext(context.Background()))
+func getEnrichPolicies(es *elasticsearch.Client) ([]string, bool) {
+	res, err := es.EnrichGetPolicy(
+		es.EnrichGetPolicy.WithContext(context.Background()),
+		es.EnrichGetPolicy.WithHeader(map[string]string{
+			"Accept": "application/json",
+		}),
+	)
 	checkErr("getting enrich policies", err)
 	defer res.Body.Close()
 
 	if res.IsError() {
 		body, _ := io.ReadAll(res.Body)
+		if isUnsupportedEnrichAPI(res.StatusCode, body) {
+			log.Warn().
+				Int("status_code", res.StatusCode).
+				Str("body", string(body)).
+				Msg("Enrich policy endpoint returned a generic 404; check proxy or routing for /_enrich/policy and confirm this URL matches the backend used by Dev Tools")
+			return nil, false
+		}
 		log.Fatal().
 			Int("status_code", res.StatusCode).
 			Str("body", string(body)).
@@ -764,10 +857,10 @@ func getEnrichPolicies(es *elasticsearch.Client) []string {
 		}
 	}
 	slices.Sort(policies)
-	return policies
+	return policies, true
 }
 
-func resolveEnrichTargets(enrich *enrichFlagValue, available []string) ([]string, []string) {
+func resolveEnrichTargets(enrich *enrichFlagValue, available []string, declared []string) ([]string, []string) {
 	if enrich == nil || !enrich.enabled {
 		return nil, nil
 	}
@@ -778,6 +871,19 @@ func resolveEnrichTargets(enrich *enrichFlagValue, available []string) ([]string
 	}
 
 	if enrich.all {
+		if len(declared) > 0 {
+			targets := make([]string, 0, len(declared))
+			missing := make([]string, 0)
+			for _, policy := range declared {
+				if _, ok := availableSet[policy]; ok {
+					targets = append(targets, policy)
+					continue
+				}
+				missing = append(missing, policy)
+			}
+			return targets, missing
+		}
+
 		targets := append([]string(nil), available...)
 		slices.Sort(targets)
 		return targets, nil
@@ -801,6 +907,9 @@ func executeEnrichPolicy(es *elasticsearch.Client, policy string) bool {
 		policy,
 		es.EnrichExecutePolicy.WithContext(context.Background()),
 		es.EnrichExecutePolicy.WithWaitForCompletion(true),
+		es.EnrichExecutePolicy.WithHeader(map[string]string{
+			"Accept": "application/json",
+		}),
 	)
 	if err != nil {
 		log.Error().Err(err).Str("policy", policy).Msg("Failed to execute enrich policy")
@@ -810,6 +919,14 @@ func executeEnrichPolicy(es *elasticsearch.Client, policy string) bool {
 
 	if res.IsError() {
 		body, _ := io.ReadAll(res.Body)
+		if isUnsupportedEnrichAPI(res.StatusCode, body) {
+			log.Warn().
+				Str("policy", policy).
+				Int("status_code", res.StatusCode).
+				Str("body", string(body)).
+				Msg("Enrich execute endpoint returned a generic 404; check proxy or routing for /_enrich/policy/<name>/_execute and confirm this URL matches the backend used by Dev Tools")
+			return false
+		}
 		log.Error().
 			Str("policy", policy).
 			Int("status_code", res.StatusCode).
@@ -852,6 +969,22 @@ func executeEnrichPolicy(es *elasticsearch.Client, policy string) bool {
 	}
 	entry.Msg(message)
 	return !isFailure
+}
+
+func isUnsupportedEnrichAPI(statusCode int, body []byte) bool {
+	if statusCode != http.StatusNotFound {
+		return false
+	}
+
+	if bytes.Contains(body, []byte(`"error":{`)) {
+		return false
+	}
+
+	return !bytes.Contains(body, []byte("resource_not_found_exception"))
+}
+
+func hasElasticsearchErrorType(body []byte, errorType string) bool {
+	return bytes.Contains(body, []byte(`"type":"`+errorType+`"`))
 }
 
 // bulkInsert handles a batch of documents and validates per-item bulk response status.
