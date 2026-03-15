@@ -143,6 +143,7 @@ func main() {
 	deleteIndex := flag.Bool("delete", false, "Delete index if it exists")
 	addToIndex := flag.Bool("add", false, "Add documents to existing index")
 	flushIndex := flag.Bool("flush", false, "Delete all documents from an existing index without deleting the index")
+	nuke := flag.Bool("nuke", false, "With -delete, also delete ingest pipelines that reference declared enrich policies so the run can fully reset managed resources")
 	idField := flag.String("id", "", "Field to use to override _id (not normal)")
 	user := flag.String("user", "", "Username for basic auth (optional)")
 	pass := flag.String("pass", "", "Password for basic auth (optional)")
@@ -233,7 +234,7 @@ func main() {
 			log.Warn().Str("index", *index).Msg("Index does not exist. Nothing to delete.")
 		}
 
-		deleteManagedResources(es, pipelineNames, policyNames)
+		deleteManagedResources(es, pipelineNames, policyNames, *nuke)
 	}
 
 	if exists {
@@ -708,51 +709,72 @@ func createPolicies(es *elasticsearch.Client, definitions namedDefinitions, name
 	}
 }
 
-func deletePolicies(es *elasticsearch.Client, names []string) {
+func deletePolicies(es *elasticsearch.Client, names []string, nuke bool) {
 	for _, name := range names {
-		res, err := es.EnrichDeletePolicy(
-			name,
-			es.EnrichDeletePolicy.WithContext(context.Background()),
-			es.EnrichDeletePolicy.WithHeader(map[string]string{
-				"Accept": "application/json",
-			}),
-		)
-		checkErr("deleting enrich policy", err)
+		for attempt := 1; attempt <= 2; attempt++ {
+			res, err := es.EnrichDeletePolicy(
+				name,
+				es.EnrichDeletePolicy.WithContext(context.Background()),
+				es.EnrichDeletePolicy.WithHeader(map[string]string{
+					"Accept": "application/json",
+				}),
+			)
+			checkErr("deleting enrich policy", err)
 
-		if res.StatusCode == http.StatusNotFound {
-			body, _ := io.ReadAll(res.Body)
-			res.Body.Close()
-			if isUnsupportedEnrichAPI(res.StatusCode, body) {
-				log.Warn().
+			if res.StatusCode == http.StatusNotFound {
+				body, _ := io.ReadAll(res.Body)
+				res.Body.Close()
+				if isUnsupportedEnrichAPI(res.StatusCode, body) {
+					log.Warn().
+						Int("status_code", res.StatusCode).
+						Str("body", string(body)).
+						Msg("Enrich policy endpoint returned a generic 404; check proxy or routing for /_enrich/policy and confirm this URL matches the backend used by Dev Tools")
+					return
+				}
+				log.Debug().Str("policy", name).Msg("Enrich policy does not exist. Nothing to delete.")
+				break
+			}
+			if res.IsError() {
+				body, _ := io.ReadAll(res.Body)
+				res.Body.Close()
+				if res.StatusCode == http.StatusConflict && nuke && policyDeleteBlockedByPipelineReference(body) && attempt == 1 {
+					referencing := findPipelinesReferencingPolicy(es, name)
+					if len(referencing) == 0 {
+						log.Fatal().
+							Str("policy", name).
+							Int("status_code", res.StatusCode).
+							Str("body", string(body)).
+							Msg("Failed to delete enrich policy; nuke mode could not find referencing pipelines")
+					}
+
+					log.Warn().
+						Str("policy", name).
+						Strs("pipelines", referencing).
+						Msg("Nuke mode deleting pipelines that reference this enrich policy before retrying policy deletion")
+					deletePipelines(es, referencing)
+					continue
+				}
+
+				log.Fatal().
+					Str("policy", name).
 					Int("status_code", res.StatusCode).
 					Str("body", string(body)).
-					Msg("Enrich policy endpoint returned a generic 404; check proxy or routing for /_enrich/policy and confirm this URL matches the backend used by Dev Tools")
-				return
+					Msg("Failed to delete enrich policy")
 			}
-			log.Debug().Str("policy", name).Msg("Enrich policy does not exist. Nothing to delete.")
-			continue
-		}
-		if res.IsError() {
-			body, _ := io.ReadAll(res.Body)
 			res.Body.Close()
-			log.Fatal().
-				Str("policy", name).
-				Int("status_code", res.StatusCode).
-				Str("body", string(body)).
-				Msg("Failed to delete enrich policy")
-		}
-		res.Body.Close()
 
-		log.Info().Str("policy", name).Msg("Deleted enrich policy")
+			log.Info().Str("policy", name).Msg("Deleted enrich policy")
+			break
+		}
 	}
 }
 
-func deleteManagedResources(es *elasticsearch.Client, pipelineNames []string, policyNames []string) {
+func deleteManagedResources(es *elasticsearch.Client, pipelineNames []string, policyNames []string, nuke bool) {
 	if len(pipelineNames) > 0 {
 		deletePipelines(es, pipelineNames)
 	}
 	if len(policyNames) > 0 {
-		deletePolicies(es, policyNames)
+		deletePolicies(es, policyNames, nuke)
 	}
 }
 
@@ -766,6 +788,74 @@ func shouldApplyManagedResourceDefinitions(indexExists, flushIndex, addToIndex b
 	}
 
 	return true
+}
+
+func findPipelinesReferencingPolicy(es *elasticsearch.Client, policy string) []string {
+	res, err := es.Ingest.GetPipeline(
+		es.Ingest.GetPipeline.WithContext(context.Background()),
+	)
+	checkErr("getting ingest pipelines", err)
+	defer res.Body.Close()
+
+	if res.StatusCode == http.StatusNotFound {
+		return nil
+	}
+	if res.IsError() {
+		body, _ := io.ReadAll(res.Body)
+		log.Fatal().
+			Int("status_code", res.StatusCode).
+			Str("body", string(body)).
+			Msg("Failed to get ingest pipelines")
+	}
+
+	var definitions namedDefinitions
+	if err := json.NewDecoder(res.Body).Decode(&definitions); err != nil {
+		log.Fatal().Err(err).Msg("Unable to parse ingest pipeline response")
+	}
+
+	return pipelineNamesReferencingPolicy(definitions, policy)
+}
+
+func pipelineNamesReferencingPolicy(definitions namedDefinitions, policy string) []string {
+	names := make([]string, 0)
+	for name, definition := range definitions {
+		if pipelineDefinitionReferencesPolicy(definition, policy) {
+			names = append(names, name)
+		}
+	}
+	slices.Sort(names)
+	return names
+}
+
+func pipelineDefinitionReferencesPolicy(definition json.RawMessage, policy string) bool {
+	var parsed any
+	if err := json.Unmarshal(definition, &parsed); err != nil {
+		return false
+	}
+	return valueReferencesPolicy(parsed, policy)
+}
+
+func valueReferencesPolicy(value any, policy string) bool {
+	switch typed := value.(type) {
+	case map[string]any:
+		if enrich, ok := typed["enrich"].(map[string]any); ok {
+			if policyName, ok := enrich["policy_name"].(string); ok && policyName == policy {
+				return true
+			}
+		}
+		for _, nested := range typed {
+			if valueReferencesPolicy(nested, policy) {
+				return true
+			}
+		}
+	case []any:
+		for _, nested := range typed {
+			if valueReferencesPolicy(nested, policy) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func refreshIndex(es *elasticsearch.Client, index string) {
@@ -1001,6 +1091,10 @@ func isUnsupportedEnrichAPI(statusCode int, body []byte) bool {
 
 func hasElasticsearchErrorType(body []byte, errorType string) bool {
 	return bytes.Contains(body, []byte(`"type":"`+errorType+`"`))
+}
+
+func policyDeleteBlockedByPipelineReference(body []byte) bool {
+	return bytes.Contains(body, []byte("pipeline is referencing it"))
 }
 
 // bulkInsert handles a batch of documents and validates per-item bulk response status.

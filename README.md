@@ -96,6 +96,7 @@ or from the command-line.
 | `-add`               | Append to an existing index or create it if it doesn’t exist; with `-flush`, also update declared pipelines and policies |
 | `-delete`            | Delete the index if it exists before recreating it (default: false)          |
 | `-flush`             | Delete all documents from an existing index without deleting the index; with `-add`, also update declared pipelines and policies |
+| `-nuke`              | With `-delete`, also delete ingest pipelines that reference declared enrich policies so managed resources can be fully reset |
 | `-id`                | Field to use in the document to override _id (default: not set)              |
 | `-enrich`            | Run enrich policies after the bulk insert; omit value for all or pass a comma-separated list |
 | `-user` / `-pass`    | Username and password for Basic Auth                                         |
@@ -116,6 +117,7 @@ or from the command-line.
 | ✅ Yes        | `-delete`       | ✅ Delete and recreate index, load data                                             |
 | ✅ Yes        | `-add -delete`  | ✅ Delete and recreate index, load data                                             |
 | ✅ Yes        | `-add -flush`   | ✅ Flush existing docs, keep settings/mappings, update declared pipelines/policies, then load data |
+| ✅ Yes        | `-delete -nuke` | ✅ Delete and recreate index; also delete pipelines that reference declared enrich policies so policy cleanup can complete |
 | ✅ Yes        | none            | ❌ **Fail** — requires explicit `-add`, `-flush`, or `-delete` to continue.         |
 
 ## Enrich Policies
@@ -125,9 +127,13 @@ Use `-enrich` after a bulk load when enrich policy backing indices need to be re
 When `-pipelines` and `-policies` are supplied, the loader imports those definitions as part of the run:
 
 - `-delete` removes the current index plus the declared pipelines and policies before rebuilding everything from scratch.
+- `-delete` fails loudly if a declared enrich policy is still referenced by another ingest pipeline. This is the safe default because those references may belong to another index workflow.
+- `-delete -nuke` keeps deleting through that conflict by finding and deleting ingest pipelines that reference the declared enrich policy, then retrying the policy delete.
 - `-flush` deletes only documents from the current index and preserves existing settings, mappings, pipelines, and policies as-is.
 - `-flush -add` deletes only documents from the current index, preserves existing settings and mappings, and updates or creates the declared pipelines and policies before loading new data.
 - `-add` updates or creates declared pipelines and policies, then appends documents.
+
+Use `-nuke` carefully. Unlike the normal one-index workflow, it can remove ingest pipelines outside the current index's declared pipeline file if those pipelines reference a declared enrich policy you are deleting.
 
 ```bash
 go run cmd/es-bulk-loader/main.go \
