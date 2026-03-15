@@ -141,11 +141,3 @@ echo "Resetting E2E resources"
 curl -fsS -X DELETE "${ES_URL}/e2e-target-index,e2e-source-index" >/dev/null || true
 delete_pipelines_from_file "${INDEX1_PIPELINES_FILE}"
 delete_enrich_policies_from_file "${INDEX1_POLICIES_FILE}"
-
-# echo "Creating source calculation pipeline and index"
-# create_pipelines_from_file "${INDEX1_PIPELINES_FILE}"
-# create_index "e2e-source-index" "${INDEX1_SETTINGS_FILE}" "${INDEX1_MAPPINGS_FILE}"
-# wait_for_index "e2e-source-index"
-
-# create_enrich_policies_from_file "${INDEX1_POLICIES_FILE}"
-# echo "Source-side E2E resources created"
