@@ -33,11 +33,46 @@ Use a top-level JSON object where each key is the policy name and each value is 
 
 ## How It Is Used
 
+The loader reads the file and issues one `PUT /_enrich/policy/<name>` request per entry.
+
 The E2E fixture keeps source-index enrich policies in:
 
 - [index1-policies.json](../test/fixtures/index1-policies.json)
 
-The setup script iterates over the keys and issues one `PUT /_enrich/policy/<name>` request for each definition.
+The loader, not the shell fixtures, is the primary path under test.
+
+## Execution Behavior
+
+Creating an enrich policy is not the same as executing it.
+
+- `-policies` creates or updates the declared policy definitions.
+- `-enrich` executes enrich policies after the bulk load completes.
+- Before execution, the loader refreshes the source index so the enrich backing index is built from visible documents.
+- If `-enrich` is passed with no explicit value and `-policies` is also supplied, the loader executes the policies declared for that run.
+- If `-enrich` is passed without `-policies`, the loader falls back to the enrich policies currently available in the cluster.
+- Unknown policy names are warned and skipped.
+- If the cluster does not expose enrich APIs, the loader warns and skips enrich create/delete/execute operations instead of aborting the whole run.
+
+## Variable Expansion
+
+Definition files are templated before they are parsed.
+
+- `${INDEX}` expands to the current `-index` value.
+- Other placeholders fall back to environment variables when present.
+
+Example:
+
+```json
+{
+  "my-policy": {
+    "match": {
+      "indices": "${INDEX}",
+      "match_field": "lookup_id",
+      "enrich_fields": ["name"]
+    }
+  }
+}
+```
 
 ## Notes
 

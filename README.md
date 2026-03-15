@@ -2,19 +2,19 @@
 
 A Go CLI for end-to-end loading of JSON documents into Elasticsearch-compatible clusters.
 
-`es-bulk-loader` is not just a thin bulk-insert wrapper. It can manage index creation, settings, mappings, ingest pipelines, enrich policies, document loading, and optional enrich execution as one repeatable CLI or CI workflow.
+`es-bulk-loader` can manage index creation, settings, mappings, ingest pipelines, enrich policies,
+document loading, and optional enrich execution as one repeatable CLI or CI workflow.
 
 ## Features
 
 - Create a new index or work against an existing one with `-add`, `-delete`, and `-flush`
 - Load index settings and mappings from JSON files during index creation
-- Create or update one or more ingest pipelines from a keyed JSON definition file, using the first declared pipeline as the default when settings do not already specify one
+- Create or update one or more ingest pipelines from a keyed JSON definition file, using the first declared pipeline as the default when settings do not already define a default pipeline
 - Create or update one or more enrich policies from a keyed JSON definition file
 - Bulk load JSON array documents with configurable batch sizes
 - Run all enrich policies or only a selected comma-separated subset with `-enrich`
 - Refresh the source index before enrich execution so enrich backing indices are built from visible documents
-- Support Basic Auth or API key authentication
-- Ship with Docker-based end-to-end coverage for pipelines, painless processing, and enrich flow
+- Warn and skip enrich operations cleanly when the cluster does not expose enrich APIs (e.g. OpenSearch)
 
 ## Quick Start
 
@@ -62,6 +62,20 @@ go run ./cmd/es-bulk-loader \
 
 Sample config file: [examples/es-bulk-loader.conf](examples/es-bulk-loader.conf)
 
+## Loader Workflow
+
+When you give `es-bulk-loader` settings, mappings, pipelines, policies, and data, it treats that as one managed workflow:
+
+1. Delete the current index and declared managed resources when `-delete` is set.
+2. Flush only documents when `-flush` is set.
+3. Create or update declared ingest pipelines.
+4. Create the index when needed, applying settings and mappings.
+5. Create or update declared enrich policies when appropriate for that run.
+6. Bulk load the data file.
+7. Refresh the source index and execute enrich policies when `-enrich` is requested.
+
+That ordering matters. The loader is intentionally opinionated so CI runs and operator workflows stay predictable.
+
 ## Command-Line Flags
 
 Settings can be loaded from a configuration file (e.g. `-config es-bulk-loader.conf`), the environment,
@@ -70,9 +84,9 @@ or from the command-line.
 | Flag                 | Description                                                                  |
 |----------------------|------------------------------------------------------------------------------|
 | `-config`            | Path to configuration file with settings                                     |
-| `-url`               | Elasticsearch URL (e.g., `http://localhost:9200`)                            |
+| `-url`               | Endpoint URL (e.g., `http://localhost:9200`)                                 |
 | `-insecureSkipVerify`| Skip TLS verification for HTTPS                                              |
-| `-index`             | Target Elasticsearch index name (**required**)                               |
+| `-index`             | Target index name (**required**)                                             |
 | `-data`              | Path to JSON array of documents to load (**required**)                       |
 | `-settings`          | Optional path to JSON file with index settings                               |
 | `-mappings`          | Optional path to JSON file with index mappings                               |
@@ -122,6 +136,8 @@ go run cmd/es-bulk-loader/main.go \
   -enrich
 ```
 
+When `-enrich` is provided without an explicit policy list and `-policies` is also provided, the loader executes the policies declared for that run. If no policy file is provided, it falls back to all enrich policies currently available in the cluster.
+
 Run only specific policies:
 
 ```bash
@@ -133,10 +149,11 @@ go run cmd/es-bulk-loader/main.go \
 ```
 
 Unknown policy names are logged as warnings and skipped.
+If the cluster does not expose the enrich APIs at all, the loader logs a warning and skips enrich policy create/delete/execute operations instead of aborting the whole load.
 
 Definition file formats are documented in [docs/PIPELINES.md](docs/PIPELINES.md) and [docs/POLICIES.md](docs/POLICIES.md).
 
-When `-pipelines` is supplied during index creation, the loader preserves the JSON key order from the pipeline file. If the settings file does not already define `index.default_pipeline`, the first declared pipeline becomes the index default pipeline automatically.
+When `-pipelines` is supplied during index creation, the loader preserves the JSON key order from the pipeline file. If the settings file does not already define a default pipeline, the first declared pipeline becomes the index default pipeline automatically.
 
 Definition files support variable expansion before they are parsed. `${INDEX}` is populated from the current `-index` value, and other placeholders fall back to environment variables when present.
 
@@ -171,6 +188,31 @@ Wrapped settings are also accepted:
 }
 ```
 
+Nested `index` settings are also accepted and normalized:
+
+```json
+{
+  "settings": {
+    "index": {
+      "number_of_shards": 2,
+      "number_of_replicas": 1
+    }
+  }
+}
+```
+
+Dotted `index.*` keys are also accepted:
+
+```json
+{
+  "index.number_of_shards": 2,
+  "index.number_of_replicas": 1,
+  "index.default_pipeline": "my-default-pipeline"
+}
+```
+
+All of these shapes are normalized into the create-index request body the loader sends to Elasticsearch.
+
 ### `mappings.json` (optional)
 
 ```json
@@ -195,26 +237,10 @@ Wrapped mappings are also accepted:
 }
 ```
 
-### `settings.conf` (optional)
-
-```ini
-url=http://localhost:9200
-insecureSkipVerify=true
-index=e2e-source-index
-settings=test/fixtures/index1-settings.json
-mappings=test/fixtures/index1-mappings.json
-pipelines=test/fixtures/index1-pipelines.json
-policies=test/fixtures/index1-policies.json
-data=test/fixtures/index1-data.json
-delete=true
-enrich=e2e-source-policy
-```
-
 ## 🛡 Requirements
 
 - Go 1.25+
-- Elasticsearch 7.x, 8.x, or 9.x (tested with v9 client)
-- Opensearch (does not support enrich policies)
+- Elasticsearch 7.x, 8.x, or 9.x (tested with v9 client) or Opensearch (does not support enrich policies)
 
 ## 👥 License
 
