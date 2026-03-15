@@ -46,10 +46,6 @@ jobs:
             type=semver,pattern={{version}}
 
       # Needed for multi-platform builds
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
-      # Needed for multi-platform builds
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -61,6 +57,8 @@ jobs:
           file: ./build/package/Dockerfile
           push: true
           platforms: linux/amd64,linux/arm64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
           build-args: |
             "APPLICATION=${{ vars.DOCKER_APPLICATION || github.event.repository.name }}"
             "BUILD_RFC3339=${{ env.RELEASE_DATE }}"
