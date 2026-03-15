@@ -240,13 +240,13 @@ func main() {
 		switch {
 		case *flushIndex:
 			if *addToIndex {
-				log.Info().Str("index", *index).Msg("Flushing existing index before adding documents")
+				log.Info().Str("index", *index).Msg("ACTION: Flushing existing index before adding documents...")
 			} else {
-				log.Info().Str("index", *index).Msg("Flushing existing index")
+				log.Info().Str("index", *index).Msg("ACTION: Flushing existing index...")
 			}
 			flushAndCheck(es, *index)
 		case *addToIndex:
-			log.Info().Str("index", *index).Msg("Appending documents to existing index")
+			log.Info().Str("index", *index).Msg("ACTION: Appending documents to existing index...")
 		default:
 			log.Fatal().
 				Str("index", *index).
@@ -254,12 +254,12 @@ func main() {
 		}
 	} else {
 		if *flushIndex {
-			log.Warn().Str("index", *index).Msg("Index does not exist. Nothing to flush.")
+			log.Warn().Str("index", *index).Msg("ACTION: Index does not exist. Nothing to flush...")
 		}
 		if *addToIndex {
-			log.Info().Str("index", *index).Msg("Creating index to append documents")
+			log.Info().Str("index", *index).Msg("ACTION: Creating index to append documents...")
 		} else {
-			log.Info().Str("index", *index).Msg("Creating index before loading data")
+			log.Info().Str("index", *index).Msg("ACTION: Creating index before loading data...")
 		}
 	}
 
@@ -282,7 +282,7 @@ func main() {
 				Msg("Failed to create index")
 		}
 		waitForIndex(es, *index)
-		log.Info().Str("index", *index).Msg("Index created")
+		log.Info().Str("index", *index).Msg("Created index")
 	}
 
 	if !exists || !*flushIndex {
@@ -699,7 +699,7 @@ func createPolicies(es *elasticsearch.Client, definitions namedDefinitions, name
 			}
 			res.Body.Close()
 
-			log.Info().Str("policy", name).Msg("Enrich policy created or updated")
+			log.Info().Str("policy", name).Msg("Created (or updated) enrich policy")
 			break
 		}
 	}
@@ -726,7 +726,7 @@ func deletePolicies(es *elasticsearch.Client, names []string) {
 					Msg("Enrich policy endpoint returned a generic 404; check proxy or routing for /_enrich/policy and confirm this URL matches the backend used by Dev Tools")
 				return
 			}
-			log.Info().Str("policy", name).Msg("Enrich policy does not exist. Nothing to delete.")
+			log.Debug().Str("policy", name).Msg("Enrich policy does not exist. Nothing to delete.")
 			continue
 		}
 		if res.IsError() {
@@ -740,7 +740,7 @@ func deletePolicies(es *elasticsearch.Client, names []string) {
 		}
 		res.Body.Close()
 
-		log.Info().Str("policy", name).Msg("Enrich policy deleted")
+		log.Info().Str("policy", name).Msg("Deleted enrich policy")
 	}
 }
 
@@ -767,7 +767,7 @@ func refreshIndex(es *elasticsearch.Client, index string) {
 			Msg("Failed to refresh index before enrich execution")
 	}
 
-	log.Info().Str("index", index).Msg("Index refreshed before enrich execution")
+	log.Info().Str("index", index).Msg("Refreshed index before executing enrich policy")
 }
 
 func runEnrichPolicies(es *elasticsearch.Client, enrich *enrichFlagValue, declared []string) {
@@ -815,7 +815,7 @@ func runEnrichPolicies(es *elasticsearch.Client, enrich *enrichFlagValue, declar
 		Int("succeeded", succeeded).
 		Int("failed", failed).
 		Int("missing", len(missing)).
-		Msg("Enrich policy execution completed")
+		Msg("Completed enrich policy execution")
 }
 
 func getEnrichPolicies(es *elasticsearch.Client) ([]string, bool) {
@@ -944,7 +944,7 @@ func executeEnrichPolicy(es *elasticsearch.Client, policy string) bool {
 	}
 
 	isFailure := false
-	event := log.Info()
+	event := log.Debug()
 	phase := ""
 	if parsed.Status != nil {
 		phase = parsed.Status.Phase
@@ -1064,14 +1064,14 @@ func bulkInsert(es *elasticsearch.Client, index string, batch []map[string]inter
 	}
 
 	succeeded := len(batch) - failed
-	log.Info().
+	log.Debug().
 		Int("inserted", inserted).
 		Int("total", total).
 		Int("batch_size", len(batch)).
 		Int("succeeded", succeeded).
 		Int("failed", failed).
 		Float64("time_taken", duration.Seconds()).
-		Msg("Batch processed")
+		Msg("Processed batch")
 
 	// TODO: Add targeted retries for retryable statuses (429/503) with exponential backoff.
 	// TODO: Persist non-retryable item failures to a dead-letter file for later replay.
