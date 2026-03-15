@@ -23,6 +23,10 @@ jobs:
         with:
           go-version: "1.25.x"
 
+      - name: Set release date
+        run: |
+          echo "BUILD_RFC3339=$(date -u +"%Y-%m-%dT%H:%M:%SZ")" >> $GITHUB_ENV
+
       - name: Determine version
         id: vars
         run: |
@@ -39,12 +43,14 @@ jobs:
           echo "Building for ${{ matrix.goos }}/${{ matrix.goarch }}"
           mkdir -p dist
           VERSION=${{ steps.vars.outputs.version }}
+          BUILD_RFC3339=${BUILD_RFC3339}
+          REVISION=${GITHUB_SHA}
           BIN_NAME="${{ vars.GOLANG_APPLICATION }}-${VERSION}-${{ matrix.goos }}-${{ matrix.goarch }}"
           if [ "${{ matrix.goos }}" = "windows" ]; then
             BIN_NAME="${BIN_NAME}.exe"
           fi
           GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} \
-            go build -ldflags="-s -w -X main.version=${VERSION}" \
+            go build -ldflags="-s -w -X main.version=${VERSION} -X main.buildRFC3339=${BUILD_RFC3339} -X main.revision=${REVISION}" \
             -o "dist/${BIN_NAME}" ./cmd/${{ vars.GOLANG_APPLICATION }}
 
       - name: Package archive

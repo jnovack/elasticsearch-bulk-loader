@@ -20,9 +20,9 @@ jobs:
       attestations: write
       id-token: write
     steps:
-      - name: set release date
+      - name: Set release date
         run: |
-          echo "RELEASE_DATE=$(date --rfc-3339=seconds | sed 's/ /T/g')" >> ${GITHUB_ENV}
+          echo "RELEASE_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")" >> ${GITHUB_ENV}
 
       - name: Check out the repo
         uses: actions/checkout@v6

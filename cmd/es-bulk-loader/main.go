@@ -19,7 +19,11 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-var version = "dev" // default if not overridden
+var (
+	version      = "dev"                  // default if not overridden
+	buildRFC3339 = "1970-01-01T00:00:00Z" // default if not overridden
+	revision     = "local"                // default if not overridden
+)
 
 type bulkResponse struct {
 	Errors bool                          `json:"errors"`
@@ -149,16 +153,24 @@ func main() {
 
 	flag.Parse()
 
-	if *showVersion {
-		fmt.Println(version)
-		os.Exit(0)
-	}
-
 	// Init logger
 	zerolog.TimeFieldFormat = time.RFC3339
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 
-	log.Info().Str("version", version).Msg("jnovack/es-bulk-loader starting...")
+	if *showVersion {
+		log.Info().
+			Str("version", version).
+			Str("build_rfc3339", buildRFC3339).
+			Str("revision", revision).
+			Msg("jnovack/es-bulk-loader")
+		os.Exit(0)
+	}
+
+	log.Info().
+		Str("version", version).
+		Str("build_rfc3339", buildRFC3339).
+		Str("revision", revision).
+		Msg("jnovack/es-bulk-loader starting...")
 
 	if (*user != "" || *pass != "") && *apiKey != "" {
 		log.Info().Msg("Cannot use both basic auth and API key. Choose one method.")

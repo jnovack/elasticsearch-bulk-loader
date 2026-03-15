@@ -33,11 +33,9 @@ ARG PACKAGE="user/repo"
 ARG REVISION="local"
 ARG VERSION="dirty"
 ARG GO_LDFLAGS="-w -s \
-    -X github.com/jnovack/release.Application=${APPLICATION} \
-    -X github.com/jnovack/release.BuildRFC3339=${BUILD_RFC3339} \
-    -X github.com/jnovack/release.Package=${PACKAGE} \
-    -X github.com/jnovack/release.Revision=${REVISION} \
-    -X github.com/jnovack/release.Version=${VERSION} \
+    -X main.buildRFC3339=${BUILD_RFC3339} \
+    -X main.revision=${REVISION} \
+    -X main.version=${VERSION} \
     "
 
 # Build
