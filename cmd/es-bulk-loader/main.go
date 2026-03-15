@@ -233,7 +233,7 @@ func main() {
 			log.Warn().Str("index", *index).Msg("Index does not exist. Nothing to delete.")
 		}
 
-		deleteManagedResources(es, pipelineDefinitions, pipelineNames, policyDefinitions, policyNames)
+		deleteManagedResources(es, pipelineNames, policyNames)
 	}
 
 	if exists {
@@ -278,7 +278,6 @@ func main() {
 			log.Fatal().
 				Str("index", *index).
 				Int("status_code", res.StatusCode).
-				Str("request_body", body).
 				Str("body", string(responseBody)).
 				Msg("Failed to create index")
 		}
@@ -317,7 +316,9 @@ func main() {
 	log.Info().Int("total", total).Msg("Starting bulk insert")
 
 	// Second pass: stream and batch insert
-	f.Seek(0, 0)
+	if _, err := f.Seek(0, 0); err != nil {
+		log.Fatal().Err(err).Msg("Error rewinding data file")
+	}
 	dec = json.NewDecoder(f)
 	_, err = dec.Token() // skip [
 	if err != nil {
@@ -743,11 +744,11 @@ func deletePolicies(es *elasticsearch.Client, names []string) {
 	}
 }
 
-func deleteManagedResources(es *elasticsearch.Client, pipelineDefinitions namedDefinitions, pipelineNames []string, policyDefinitions namedDefinitions, policyNames []string) {
-	if len(pipelineDefinitions) > 0 {
+func deleteManagedResources(es *elasticsearch.Client, pipelineNames []string, policyNames []string) {
+	if len(pipelineNames) > 0 {
 		deletePipelines(es, pipelineNames)
 	}
-	if len(policyDefinitions) > 0 {
+	if len(policyNames) > 0 {
 		deletePolicies(es, policyNames)
 	}
 }
