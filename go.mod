@@ -1,4 +1,4 @@
-module github.com/jnovack/elasticsearch-bulk-loader
+module github.com/jnovack/es-bulk-loader
 
 go 1.25.0
 
