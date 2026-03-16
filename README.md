@@ -7,14 +7,15 @@ document loading, and optional enrich execution as one repeatable CLI or CI work
 
 ## Features
 
-- Create a new index or work against an existing one with `-add`, `-delete`, and `-flush`
-- Load index settings and mappings from JSON files during index creation
-- Create or update one or more ingest pipelines from a keyed JSON definition file, using the first declared pipeline as the default when settings do not already define a default pipeline
-- Create or update one or more enrich policies from a keyed JSON definition file
-- Bulk load JSON array documents with configurable batch sizes
-- Run all enrich policies or only a selected comma-separated subset with `-enrich`
-- Refresh the source index before enrich execution so enrich backing indices are built from visible documents
-- Warn and skip enrich operations cleanly when the cluster does not expose enrich APIs (e.g. OpenSearch)
+- Full index lifecycle support: create, replace data, rebuild, and destructive cleanup
+- Managed Elasticsearch resources: settings, mappings, ingest pipelines, and enrich policies
+- Keyed JSON definitions for multiple pipelines or policies in a single file
+- Automatic default-pipeline selection from the first declared pipeline when settings leave it unset
+- Bulk JSON loading with configurable batch sizes and optional `_id` override
+- Enrich execution after load, including source-index refresh before policy execution
+- Practical input normalization for wrapped settings, nested `index` settings, and `index.*` keys
+- Safe-by-default policy deletion, with an explicit destructive override for dependent pipeline cleanup
+- Graceful handling for clusters that do not expose enrich APIs
 
 ## Quick Start
 
@@ -40,6 +41,7 @@ docker run --rm jnovack/es-bulk-loader:latest \
   -data data.json \
   -batch 500 \
   -delete \
+  -sync-managed \
   -enrich
 ```
 
@@ -57,22 +59,42 @@ go run ./cmd/es-bulk-loader \
   -data data.json \
   -batch 500 \
   -delete \
+  -sync-managed \
   -enrich
 ```
 
 Sample config file: [examples/es-bulk-loader.conf](examples/es-bulk-loader.conf)
 
+## Testing
+
+Unit tests stay in the default Go test path:
+
+```bash
+go test ./...
+```
+
+Docker-backed end-to-end tests live behind the `e2e` build tag:
+
+```bash
+go test -tags=e2e ./test
+```
+
 ## Loader Workflow
 
-When you give `es-bulk-loader` settings, mappings, pipelines, policies, and data, it treats that as one managed workflow:
+The loader now separates three concerns:
 
-1. Delete the current index and declared managed resources when `-delete` is set.
-2. Flush only documents when `-flush` is set.
-3. Create or update declared ingest pipelines.
-4. Create the index when needed, applying settings and mappings.
-5. Create or update declared enrich policies when appropriate for that run.
-6. Bulk load the data file.
-7. Refresh the source index and execute enrich policies when `-enrich` is requested.
+1. `-nuke` removes the current index and declared managed resources first.
+2. One optional data action, exactly one of `-add`, `-flush`, or `-delete`, controls how documents are handled.
+3. `-sync-managed` independently creates or updates declared pipelines and policies.
+
+When combined, the execution order is:
+
+1. Run `-nuke` first, if requested.
+2. Run the selected data action, if any (one of `-add`, `-flush`, or `-delete`).
+3. Create the index when needed, applying settings and mappings.
+4. Run `-sync-managed`, if requested.
+5. Bulk load data, if a data action was selected.
+6. Refresh the source index and execute enrich policies when `-enrich` is requested.
 
 That ordering matters. The loader is intentionally opinionated so CI runs and operator workflows stay predictable.
 
@@ -87,16 +109,17 @@ or from the command-line.
 | `-url`               | Endpoint URL (e.g., `http://localhost:9200`)                                 |
 | `-insecureSkipVerify`| Skip TLS verification for HTTPS                                              |
 | `-index`             | Target index name (**required**)                                             |
-| `-data`              | Path to JSON array of documents to load (**required**)                       |
 | `-settings`          | Optional path to JSON file with index settings                               |
 | `-mappings`          | Optional path to JSON file with index mappings                               |
 | `-pipelines`         | Optional path to JSON file with one or more ingest pipeline definitions      |
 | `-policies`          | Optional path to JSON file with one or more enrich policy definitions        |
 | `-batch`             | Number of documents per bulk insert (default: 1000)                          |
-| `-add`               | Append to an existing index or create it if it doesn’t exist; with `-flush`, also update declared pipelines and policies |
-| `-delete`            | Delete the index if it exists before recreating it (default: false)          |
-| `-flush`             | Delete all documents from an existing index without deleting the index; with `-add`, also update declared pipelines and policies |
-| `-nuke`              | With `-delete`, also delete ingest pipelines that reference declared enrich policies so managed resources can be fully reset |
+| `-add`               | Append data to an existing index or create the index first if it does not exist |
+| `-flush`             | Delete all documents from an existing index without deleting the index, then load replacement data |
+| `-delete`            | Delete the index and declared managed resources before recreating the index and loading data |
+| `-data`              | Path to JSON array of documents to load (**required with** `-add`, `-flush`, or `-delete`) |
+| `-sync-managed`      | Create or update declared ingest pipelines and enrich policies               |
+| `-nuke`              | Delete the current index and declared managed resources first, including dependent pipelines that reference declared enrich policies |
 | `-id`                | Field to use in the document to override _id (default: not set)              |
 | `-enrich`            | Run enrich policies after the bulk insert; omit value for all or pass a comma-separated list |
 | `-user` / `-pass`    | Username and password for Basic Auth                                         |
@@ -105,20 +128,23 @@ or from the command-line.
 
 ## Behavior Summary
 
-| Index Exists  | Flags Set       | Action                                                                              |
-|---------------|-----------------|-------------------------------------------------------------------------------------|
-| ❌ No         | none or `-add`  | ✅ Create index (with optional settings/mappings), load data                        |
-| ❌ No         | `-delete`       | ✅ Warn (nothing to delete), create index, load data                                |
-| ❌ No         | `-flush`        | ✅ Warn (nothing to flush), create index, load data                                 |
-| ❌ No         | `-add -delete`  | ✅ Create index, load data                                                          |
-| ❌ No         | `-add -flush`   | ✅ Create index, load data                                                          |
-| ✅ Yes        | `-add`          | ✅ Append data to existing index                                                    |
-| ✅ Yes        | `-flush`        | ✅ Delete all documents, keep index settings/mappings/policies/pipelines unchanged, load data |
-| ✅ Yes        | `-delete`       | ✅ Delete and recreate index, load data                                             |
-| ✅ Yes        | `-add -delete`  | ✅ Delete and recreate index, load data                                             |
-| ✅ Yes        | `-add -flush`   | ✅ Flush existing docs, keep settings/mappings, update declared pipelines/policies, then load data |
-| ✅ Yes        | `-delete -nuke` | ✅ Delete and recreate index; also delete pipelines that reference declared enrich policies so policy cleanup can complete |
-| ✅ Yes        | none            | ❌ **Fail** — requires explicit `-add`, `-flush`, or `-delete` to continue.         |
+`-add`, `-flush`, and `-delete` are mutually exclusive.
+
+| Flags           | Effect                                                                                                                     |
+|-----------------|----------------------------------------------------------------------------------------------------------------------------|
+| `-add`          | Append data to an existing index, or create the index and load data if it does not exist                                   |
+| `-flush`        | Remove existing documents, keep the existing index structure, then load replacement data                                   |
+| `-delete`       | Remove the current index and declared managed resources, then recreate the index and load data                             |
+| `-sync-managed` | Create or update declared pipelines and policies without changing document data by itself                                  |
+| `-nuke`         | Remove the current index and declared managed resources first; if combined with another action, that action runs afterward |
+
+Common combinations:
+
+- `-add -sync-managed`: append documents and ensure declared pipelines and policies exist
+- `-flush -sync-managed`: replace documents, keep settings and mappings, and ensure declared pipelines and policies exist
+- `-delete -sync-managed`: rebuild the index from scratch and recreate declared pipelines and policies
+- `-nuke -delete -sync-managed`: force a full teardown first, then rebuild cleanly
+- `-nuke`: remove the current index and declared managed resources without loading new data
 
 ## Enrich Policies
 
@@ -126,19 +152,19 @@ Use `-enrich` after a bulk load when enrich policy backing indices need to be re
 
 When `-pipelines` and `-policies` are supplied, the loader imports those definitions as part of the run:
 
-- `-delete` removes the current index plus the declared pipelines and policies before rebuilding everything from scratch.
+- `-sync-managed` creates pipelines and attempts to create declared enrich policies, refreshing when necessary.
 - `-delete` fails loudly if a declared enrich policy is still referenced by another ingest pipeline. This is the safe default because those references may belong to another index workflow.
-- `-delete -nuke` keeps deleting through that conflict by finding and deleting ingest pipelines that reference the declared enrich policy, then retrying the policy delete.
-- `-flush` deletes only documents from the current index and preserves existing settings, mappings, pipelines, and policies as-is.
-- `-flush -add` deletes only documents from the current index, preserves existing settings and mappings, and updates or creates the declared pipelines and policies before loading new data.
-- `-add` updates or creates declared pipelines and policies, then appends documents.
+- `-nuke` keeps deleting through that conflict by finding and deleting ingest pipelines that reference the declared enrich policy. If one of those pipelines is still configured as `index.default_pipeline` on another index, the loader clears that setting on the dependent index before retrying the pipeline delete.
+- `-add` and `-flush` affect documents only. They do not modify pipelines or policies unless `-sync-managed` is also set.
 
-Use `-nuke` carefully. Unlike the normal one-index workflow, it can remove ingest pipelines outside the current index's declared pipeline file if those pipelines reference a declared enrich policy you are deleting.
+> [!CAUTION]
+> Use `-nuke` carefully. Unlike the normal one-index workflow, it can remove ingest pipelines outside the current index's declared pipeline file and clear `index.default_pipeline` on dependent indices if those pipelines reference a declared enrich policy you are deleting.
 
 ```bash
 go run cmd/es-bulk-loader/main.go \
   -url https://localhost:9200 \
   -index my-index \
+  -sync-managed \
   -data data.json \
   -enrich
 ```
@@ -151,6 +177,7 @@ Run only specific policies:
 go run cmd/es-bulk-loader/main.go \
   -url https://localhost:9200 \
   -index my-index \
+  -sync-managed \
   -data data.json \
   -enrich=policy-a,policy-b
 ```
