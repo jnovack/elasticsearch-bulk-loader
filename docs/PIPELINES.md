@@ -36,7 +36,7 @@ The loader preserves the key order in this file. When it creates an index and th
 
 ## How It Is Used
 
-The loader reads the file, preserves the JSON key order, and sends one `PUT /_ingest/pipeline/<name>` request per entry.
+The loader reads the file, preserves the JSON key order, and sends one `PUT /_ingest/pipeline/<name>` request per entry when `-sync-managed` is set.
 
 The E2E fixture keeps pipeline definitions per index:
 

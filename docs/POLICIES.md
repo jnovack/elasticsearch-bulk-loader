@@ -33,7 +33,7 @@ Use a top-level JSON object where each key is the policy name and each value is 
 
 ## How It Is Used
 
-The loader reads the file and issues one `PUT /_enrich/policy/<name>` request per entry.
+The loader reads the file and issues one `PUT /_enrich/policy/<name>` request per entry when `-sync-managed` is set.
 
 The E2E fixture keeps source-index enrich policies in:
 
@@ -45,7 +45,7 @@ The loader, not the shell fixtures, is the primary path under test.
 
 Creating an enrich policy is not the same as executing it.
 
-- `-policies` creates or updates the declared policy definitions.
+- `-sync-managed` creates the declared policy definitions.
 - `-enrich` executes enrich policies after the bulk load completes.
 - Before execution, the loader refreshes the source index so the enrich backing index is built from visible documents.
 - If `-enrich` is passed with no explicit value and `-policies` is also supplied, the loader executes the policies declared for that run.
