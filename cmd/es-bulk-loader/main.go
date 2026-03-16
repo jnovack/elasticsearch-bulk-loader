@@ -809,7 +809,7 @@ func deletePolicies(es *elasticsearch.Client, names []string, nuke bool) {
 						Str("policy", name).
 						Strs("pipelines", referencing).
 						Msg("Nuke mode deleting pipelines that reference this enrich policy before retrying policy deletion")
-					deletePipelines(es, referencing)
+					deletePipelinesForNuke(es, referencing)
 					continue
 				}
 
@@ -833,6 +833,52 @@ func deleteManagedResources(es *elasticsearch.Client, pipelineNames []string, po
 	}
 	if len(policyNames) > 0 {
 		deletePolicies(es, policyNames, nuke)
+	}
+}
+
+func deletePipelinesForNuke(es *elasticsearch.Client, names []string) {
+	for _, name := range names {
+		res, err := es.Ingest.DeletePipeline(
+			name,
+			es.Ingest.DeletePipeline.WithContext(context.Background()),
+		)
+		checkErr("deleting pipeline", err)
+
+		if res.StatusCode == http.StatusNotFound {
+			res.Body.Close()
+			log.Info().Str("pipeline", name).Msg("Pipeline does not exist. Nothing to delete.")
+			continue
+		}
+		if res.IsError() {
+			body, _ := io.ReadAll(res.Body)
+			res.Body.Close()
+			if res.StatusCode == http.StatusBadRequest && pipelineDeleteBlockedByDefaultIndex(body) {
+				indices := findIndicesUsingDefaultPipeline(es, name)
+				if len(indices) == 0 {
+					log.Fatal().
+						Str("pipeline", name).
+						Int("status_code", res.StatusCode).
+						Str("body", string(body)).
+						Msg("Failed to delete pipeline; nuke mode could not find indices using it as default pipeline")
+				}
+
+				log.Warn().
+					Str("pipeline", name).
+					Strs("indices", indices).
+					Msg("Nuke mode clearing index.default_pipeline on indices that use this pipeline before retrying pipeline deletion")
+				clearDefaultPipelineForIndices(es, indices)
+				deletePipelines(es, []string{name})
+				continue
+			}
+			log.Fatal().
+				Str("pipeline", name).
+				Int("status_code", res.StatusCode).
+				Str("body", string(body)).
+				Msg("Failed to delete pipeline")
+		}
+		res.Body.Close()
+
+		log.Info().Str("pipeline", name).Msg("Pipeline deleted")
 	}
 }
 
@@ -860,6 +906,66 @@ func findPipelinesReferencingPolicy(es *elasticsearch.Client, policy string) []s
 	}
 
 	return pipelineNamesReferencingPolicy(definitions, policy)
+}
+
+func findIndicesUsingDefaultPipeline(es *elasticsearch.Client, pipeline string) []string {
+	res, err := es.Indices.GetSettings(es.Indices.GetSettings.WithName("*"))
+	checkErr("getting index settings", err)
+	defer res.Body.Close()
+
+	if res.StatusCode == http.StatusNotFound {
+		return nil
+	}
+	if res.IsError() {
+		body, _ := io.ReadAll(res.Body)
+		log.Fatal().
+			Int("status_code", res.StatusCode).
+			Str("body", string(body)).
+			Msg("Failed to get index settings")
+	}
+
+	var parsed map[string]struct {
+		Settings struct {
+			Index struct {
+				DefaultPipeline string `json:"default_pipeline"`
+			} `json:"index"`
+		} `json:"settings"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&parsed); err != nil {
+		log.Fatal().Err(err).Msg("Unable to parse index settings response")
+	}
+
+	indices := make([]string, 0)
+	for index, settings := range parsed {
+		if settings.Settings.Index.DefaultPipeline == pipeline {
+			indices = append(indices, index)
+		}
+	}
+	slices.Sort(indices)
+	return indices
+}
+
+func clearDefaultPipelineForIndices(es *elasticsearch.Client, indices []string) {
+	for _, index := range indices {
+		res, err := es.Indices.PutSettings(
+			strings.NewReader(`{"index.default_pipeline":null}`),
+			es.Indices.PutSettings.WithIndex(index),
+		)
+		checkErr("clearing index.default_pipeline", err)
+
+		if res.IsError() {
+			body, _ := io.ReadAll(res.Body)
+			res.Body.Close()
+			log.Fatal().
+				Str("index", index).
+				Int("status_code", res.StatusCode).
+				Str("body", string(body)).
+				Msg("Failed to clear index.default_pipeline")
+		}
+		res.Body.Close()
+
+		log.Warn().Str("index", index).Msg("Cleared index.default_pipeline to allow nuke cleanup")
+	}
 }
 
 func pipelineNamesReferencingPolicy(definitions namedDefinitions, policy string) []string {
@@ -1141,6 +1247,10 @@ func hasElasticsearchErrorType(body []byte, errorType string) bool {
 
 func policyDeleteBlockedByPipelineReference(body []byte) bool {
 	return bytes.Contains(body, []byte("pipeline is referencing it"))
+}
+
+func pipelineDeleteBlockedByDefaultIndex(body []byte) bool {
+	return bytes.Contains(body, []byte("cannot be deleted because it is the default pipeline"))
 }
 
 // bulkInsert handles a batch of documents and validates per-item bulk response status.
