@@ -59,6 +59,15 @@ type enrichFlagValue struct {
 	raw     string
 }
 
+type dataAction string
+
+const (
+	dataActionNone   dataAction = ""
+	dataActionAdd    dataAction = "add"
+	dataActionFlush  dataAction = "flush"
+	dataActionDelete dataAction = "delete"
+)
+
 type enrichPolicySummary struct {
 	Config map[string]struct {
 		Name string `json:"name"`
@@ -143,7 +152,8 @@ func main() {
 	deleteIndex := flag.Bool("delete", false, "Delete index if it exists")
 	addToIndex := flag.Bool("add", false, "Add documents to existing index")
 	flushIndex := flag.Bool("flush", false, "Delete all documents from an existing index without deleting the index")
-	nuke := flag.Bool("nuke", false, "With -delete, also delete ingest pipelines that reference declared enrich policies so the run can fully reset managed resources")
+	syncManaged := flag.Bool("sync-managed", false, "Create or update declared ingest pipelines and enrich policies")
+	nuke := flag.Bool("nuke", false, "Delete the current index and declared managed resources, including dependent pipelines that reference declared enrich policies")
 	idField := flag.String("id", "", "Field to use to override _id (not normal)")
 	user := flag.String("user", "", "Username for basic auth (optional)")
 	pass := flag.String("pass", "", "Password for basic auth (optional)")
@@ -181,7 +191,24 @@ func main() {
 		os.Exit(1)
 	}
 
-	if *index == "" || *dataFile == "" {
+	action, err := selectedDataAction(*addToIndex, *flushIndex, *deleteIndex)
+	if err != nil {
+		log.Info().Err(err).Msg("Invalid flag combination")
+		flag.Usage()
+		os.Exit(1)
+	}
+
+	if *index == "" {
+		flag.Usage()
+		os.Exit(1)
+	}
+
+	if action.requiresDataFile() && *dataFile == "" {
+		flag.Usage()
+		os.Exit(1)
+	}
+
+	if action == dataActionNone && !*syncManaged && !*nuke && !enrich.enabled {
 		flag.Usage()
 		os.Exit(1)
 	}
@@ -213,7 +240,7 @@ func main() {
 	pipelineDefinitions, pipelineNames := readNamedDefinitions(*pipelinesFile, "pipeline", variables)
 	policyDefinitions, policyNames := readNamedDefinitions(*policiesFile, "policy", variables)
 	defaultPipeline := ""
-	if len(pipelineNames) > 0 {
+	if *syncManaged && len(pipelineNames) > 0 {
 		defaultPipeline = pipelineNames[0]
 	}
 
@@ -221,55 +248,52 @@ func main() {
 	exists, err := indexExists(es, *index)
 	checkErr("checking if index exists", err)
 
-	if *deleteIndex {
+	if *nuke {
 		if exists {
-			if *addToIndex {
-				log.Info().Str("index", *index).Msg("Deleting and recreating index before adding documents")
-			} else {
-				log.Info().Str("index", *index).Msg("Deleting index")
-			}
+			log.Warn().Str("index", *index).Msg("Nuke deleting index and declared managed resources")
+			deleteAndCheck(es, *index)
+			exists = false
+		} else {
+			log.Warn().Str("index", *index).Msg("Index does not exist. Nuke will still remove declared managed resources")
+		}
+
+		deleteManagedResources(es, pipelineNames, policyNames, true)
+	}
+
+	switch action {
+	case dataActionDelete:
+		if exists {
+			log.Info().Str("index", *index).Msg("Deleting index before reloading data")
 			deleteAndCheck(es, *index)
 			exists = false
 		} else {
 			log.Warn().Str("index", *index).Msg("Index does not exist. Nothing to delete.")
 		}
 
-		deleteManagedResources(es, pipelineNames, policyNames, *nuke)
-	}
-
-	if exists {
-		switch {
-		case *flushIndex:
-			if *addToIndex {
-				log.Info().Str("index", *index).Msg("ACTION: Flushing existing index before adding documents...")
-			} else {
-				log.Info().Str("index", *index).Msg("ACTION: Flushing existing index...")
-			}
+		deleteManagedResources(es, pipelineNames, policyNames, false)
+	case dataActionFlush:
+		if exists {
+			log.Info().Str("index", *index).Msg("Flushing existing index before loading replacement data")
 			flushAndCheck(es, *index)
-		case *addToIndex:
-			log.Info().Str("index", *index).Msg("ACTION: Appending documents to existing index...")
-		default:
-			log.Fatal().
-				Str("index", *index).
-				Msg("Index exists. Use -delete to recreate, -flush to clear documents, or -add to append.")
-		}
-	} else {
-		if *flushIndex {
-			log.Warn().Str("index", *index).Msg("ACTION: Index does not exist. Nothing to flush...")
-		}
-		if *addToIndex {
-			log.Info().Str("index", *index).Msg("ACTION: Creating index to append documents...")
 		} else {
-			log.Info().Str("index", *index).Msg("ACTION: Creating index before loading data...")
+			log.Warn().Str("index", *index).Msg("Index does not exist. Nothing to flush.")
+		}
+	case dataActionAdd:
+		if exists {
+			log.Info().Str("index", *index).Msg("Appending documents to existing index")
+		} else {
+			log.Info().Str("index", *index).Msg("Creating index to append documents")
 		}
 	}
 
-	if !exists {
+	shouldCreateIndex := action.requiresDataFile() && !exists
+
+	if shouldCreateIndex && *syncManaged {
 		createPipelines(es, pipelineDefinitions, pipelineNames)
 	}
 
 	// Create index if needed
-	if !exists {
+	if shouldCreateIndex {
 		body := buildCreateIndexBody(*settingsFile, *mappingsFile, defaultPipeline, variables)
 		res, err := es.Indices.Create(*index, es.Indices.Create.WithBody(strings.NewReader(body)))
 		checkErr("creating index", err)
@@ -283,91 +307,88 @@ func main() {
 				Msg("Failed to create index")
 		}
 		waitForIndex(es, *index)
-		log.Info().Str("index", *index).Msg("Created index")
+		exists = true
+		log.Info().Str("index", *index).Msg("Index created")
 	}
 
-	if shouldApplyManagedResourceDefinitions(exists, *flushIndex, *addToIndex) {
+	if *syncManaged && exists {
+		if !shouldCreateIndex {
+			createPipelines(es, pipelineDefinitions, pipelineNames)
+		}
 		createPolicies(es, policyDefinitions, policyNames)
 	}
 
-	if exists && shouldApplyManagedResourceDefinitions(exists, *flushIndex, *addToIndex) {
-		createPipelines(es, pipelineDefinitions, pipelineNames)
-	}
+	if action.requiresDataFile() {
+		log.Info().Msg("Starting bulk insert")
 
-	log.Info().Msg("Starting bulk insert...")
+		// Stream data: first pass to count total objects
+		f, err := os.Open(*dataFile)
+		checkErr("opening data file", err)
+		defer f.Close()
 
-	// Stream data: first pass to count total objects
-	f, err := os.Open(*dataFile)
-	checkErr("opening data file", err)
-	defer f.Close()
-
-	dec := json.NewDecoder(f)
-	tok, err := dec.Token()
-	if err != nil || tok != json.Delim('[') {
-		log.Fatal().Msg("Data file must be a JSON array")
-	}
-
-	total := 0
-	for dec.More() {
-		var tmp map[string]interface{}
-		if err := dec.Decode(&tmp); err != nil {
-			log.Fatal().Err(err).Msg("Error counting objects in data file")
+		dec := json.NewDecoder(f)
+		tok, err := dec.Token()
+		if err != nil || tok != json.Delim('[') {
+			log.Fatal().Msg("Data file must be a JSON array")
 		}
-		total++
-	}
 
-	log.Debug().Int("total", total).Msg("Data file counted")
-
-	// Second pass: stream and batch insert
-	if _, err := f.Seek(0, 0); err != nil {
-		log.Fatal().Err(err).Msg("Error rewinding data file")
-	}
-	dec = json.NewDecoder(f)
-	_, err = dec.Token() // skip [
-	if err != nil {
-		log.Fatal().Err(err).Msg("Error re-reading data file")
-	}
-
-	overallStart := time.Now()
-	batch := make([]map[string]interface{}, 0, *batchSize)
-	processed := 0
-	succeededTotal := 0
-	failedTotal := 0
-	for dec.More() {
-		var doc map[string]interface{}
-		if err := dec.Decode(&doc); err != nil {
-			log.Fatal().Err(err).Msg("Error decoding object in data file")
+		total := 0
+		for dec.More() {
+			var tmp map[string]interface{}
+			if err := dec.Decode(&tmp); err != nil {
+				log.Fatal().Err(err).Msg("Error counting objects in data file")
+			}
+			total++
 		}
-		batch = append(batch, doc)
-		if len(batch) == *batchSize {
+
+		if _, err := f.Seek(0, 0); err != nil {
+			log.Fatal().Err(err).Msg("Error rewinding data file")
+		}
+		dec = json.NewDecoder(f)
+		_, err = dec.Token() // skip [
+		if err != nil {
+			log.Fatal().Err(err).Msg("Error re-reading data file")
+		}
+
+		overallStart := time.Now()
+		batch := make([]map[string]interface{}, 0, *batchSize)
+		processed := 0
+		succeededTotal := 0
+		failedTotal := 0
+		for dec.More() {
+			var doc map[string]interface{}
+			if err := dec.Decode(&doc); err != nil {
+				log.Fatal().Err(err).Msg("Error decoding object in data file")
+			}
+			batch = append(batch, doc)
+			if len(batch) == *batchSize {
+				result := bulkInsert(es, *index, batch, processed+len(batch), total, *idField)
+				processed += len(batch)
+				succeededTotal += result.Succeeded
+				failedTotal += result.Failed
+				batch = batch[:0]
+			}
+		}
+		if len(batch) > 0 {
 			result := bulkInsert(es, *index, batch, processed+len(batch), total, *idField)
 			processed += len(batch)
 			succeededTotal += result.Succeeded
 			failedTotal += result.Failed
-			batch = batch[:0]
 		}
-	}
-	if len(batch) > 0 {
-		result := bulkInsert(es, *index, batch, processed+len(batch), total, *idField)
-		processed += len(batch)
-		succeededTotal += result.Succeeded
-		failedTotal += result.Failed
-	}
 
-	overallDuration := time.Since(overallStart)
-	log.Info().
-		Int("processed", processed).
-		Int("succeeded", succeededTotal).
-		Int("failed", failedTotal).
-		Float64("total_time", overallDuration.Seconds()).
-		Msg("Bulk load completed")
-
-	if failedTotal > 0 {
-		log.Warn().
+		overallDuration := time.Since(overallStart)
+		log.Info().
+			Int("processed", processed).
+			Int("succeeded", succeededTotal).
 			Int("failed", failedTotal).
-			Msg("Bulk load completed with failed items")
+			Float64("total_time", overallDuration.Seconds()).
+			Msg("Bulk load completed")
 
-		// TODO: document and implement retry strategy for retryable bulk item failures (e.g. 429/503), plus dead-letter handling for non-retryable items
+		if failedTotal > 0 {
+			log.Warn().
+				Int("failed", failedTotal).
+				Msg("Bulk load completed with failed items")
+		}
 	}
 
 	if enrich.enabled {
@@ -381,6 +402,37 @@ func checkErr(context string, err error) {
 	log.Trace().Msg(context)
 	if err != nil {
 		log.Fatal().Err(err).Msgf("Error during %s", context)
+	}
+}
+
+func (a dataAction) requiresDataFile() bool {
+	return a != dataActionNone
+}
+
+func selectedDataAction(addToIndex, flushIndex, deleteIndex bool) (dataAction, error) {
+	actionCount := 0
+	if addToIndex {
+		actionCount++
+	}
+	if flushIndex {
+		actionCount++
+	}
+	if deleteIndex {
+		actionCount++
+	}
+	if actionCount > 1 {
+		return dataActionNone, fmt.Errorf("-add, -flush, and -delete are mutually exclusive")
+	}
+
+	switch {
+	case addToIndex:
+		return dataActionAdd, nil
+	case flushIndex:
+		return dataActionFlush, nil
+	case deleteIndex:
+		return dataActionDelete, nil
+	default:
+		return dataActionNone, nil
 	}
 }
 
@@ -695,6 +747,12 @@ func createPolicies(es *elasticsearch.Client, definitions namedDefinitions, name
 					time.Sleep(500 * time.Millisecond)
 					continue
 				}
+				if hasElasticsearchErrorType(body, "resource_already_exists_exception") {
+					log.Info().
+						Str("policy", name).
+						Msg("Enrich policy already exists. Leaving it in place")
+					break
+				}
 				log.Fatal().
 					Str("policy", name).
 					Int("status_code", res.StatusCode).
@@ -703,7 +761,7 @@ func createPolicies(es *elasticsearch.Client, definitions namedDefinitions, name
 			}
 			res.Body.Close()
 
-			log.Info().Str("policy", name).Msg("Created (or updated) enrich policy")
+			log.Info().Str("policy", name).Msg("Created enrich policy")
 			break
 		}
 	}
@@ -776,18 +834,6 @@ func deleteManagedResources(es *elasticsearch.Client, pipelineNames []string, po
 	if len(policyNames) > 0 {
 		deletePolicies(es, policyNames, nuke)
 	}
-}
-
-func shouldApplyManagedResourceDefinitions(indexExists, flushIndex, addToIndex bool) bool {
-	if !indexExists {
-		return true
-	}
-
-	if flushIndex && !addToIndex {
-		return false
-	}
-
-	return true
 }
 
 func findPipelinesReferencingPolicy(es *elasticsearch.Client, policy string) []string {
