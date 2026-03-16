@@ -1,51 +1,139 @@
-# Enrich E2E Fixture
+# Test Guide
 
-This fixture spins up Elasticsearch 9 and uses the `es-bulk-loader` container itself to create index settings, mappings, pipelines, policies, load source data, execute enrich, create the target index, load target data, and verify the final documents.
+This directory contains two different end-to-end testing paths:
 
-## Prerequisites
+- `test/run.sh` is the shell-driven smoke test.
+- `test/e2e_test.go` is the Go-native tagged E2E suite.
 
-- Docker with `docker compose`
-- `curl`
-- `jq`
+The Go suite is the primary automated integration test for the loader itself. It builds the real CLI, runs real commands, and verifies Elasticsearch state directly.
 
-## Run
+## Test Layers
+
+Use the normal Go test path for unit tests:
+
+```bash
+go test ./...
+```
+
+Use the tagged E2E suite when you want real Elasticsearch lifecycle coverage:
+
+```bash
+go test -tags=e2e ./test
+```
+
+Run the E2E suite in verbose mode to see each scenario and the checks it performs:
+
+```bash
+go test -tags=e2e -v ./test
+```
+
+The shell smoke test remains useful for manual debugging:
 
 ```bash
 ./test/run.sh
 ```
 
-Set `KEEP_ENV=1` to leave Elasticsearch running for inspection after the test:
+## What The Go E2E Suite Does
 
-```bash
-KEEP_ENV=1 ./test/run.sh
-```
+The tagged E2E suite in [`e2e/e2e_test.go`](e2e/e2e_test.go) does the following:
 
-`run.sh` uses `ES_URL` for host-side health checks and verification, and `LOADER_ES_URL` for the `es-bulk-loader` container's internal connection to Elasticsearch. The defaults are `http://127.0.0.1:9200` and `http://elasticsearch:9200`.
+1. Builds `./cmd/es-bulk-loader` once into a temporary binary.
+2. Starts a real Elasticsearch 9 container with Docker.
+3. Creates per-scenario fixture directories under `t.TempDir()`.
+4. Runs the compiled loader binary with real CLI flags.
+5. Verifies Elasticsearch with direct HTTP calls.
+6. Tears down the Docker container when the package finishes.
 
-## What The Fixture Proves
+This means the tests are not mocking Elasticsearch behavior. They are checking the actual order of operations and the resulting cluster state.
 
-The fixture is meant to verify the loader's real lifecycle, not just isolated API calls.
+## Isolation Model
 
-It validates that:
+The suite uses one shared Elasticsearch container for the whole `./test` package, but each scenario is isolated in practice:
 
-- The first pipeline declared for each index becomes `index.default_pipeline` when the settings file leaves it unset.
-- Settings and mappings are applied during index creation.
-- Source documents in `e2e-source-index` have `calculated_value` and `source_label` populated by a painless ingest script.
-- Enrich policies are created through the loader, not by helper setup scripts.
-- The source index is refreshed before enrich execution.
-- Target documents in `e2e-target-index` are enriched from `e2e-source-policy` and contain the calculated source fields.
+- Every scenario gets a unique prefix such as `e2e-01`, `e2e-02`, and so on.
+- Indices, pipelines, and policies are named from that prefix.
+- `ctx.cleanup(t)` runs before each scenario starts.
+- The same cleanup runs again in `t.Cleanup(...)` after the scenario finishes.
 
-## Fixture Layout
+That means one scenario should not taint another, because resources do not share names and are deleted both before and after use.
 
-- [fixtures/index1-settings.json](fixtures/index1-settings.json), [fixtures/index1-mappings.json](fixtures/index1-mappings.json), [fixtures/index1-pipelines.json](fixtures/index1-pipelines.json), and [fixtures/index1-policies.json](fixtures/index1-policies.json) define the source index.
-- [fixtures/index2-create.json](fixtures/index2-create.json), [fixtures/index2-settings.json](fixtures/index2-settings.json), [fixtures/index2-mappings.json](fixtures/index2-mappings.json), and [fixtures/index2-pipelines.json](fixtures/index2-pipelines.json) define the target index.
-- [fixtures/index1-data.json](fixtures/index1-data.json) and [fixtures/index2-data.json](fixtures/index2-data.json) provide the source and target documents.
+This is not a brand-new Elasticsearch cluster per test case. It is a shared cluster with strict per-scenario cleanup. That keeps the suite faster while still giving strong isolation for this repository.
 
-This split is intentional. The source index owns the enrich policy. The target index proves that enrich execution produced usable backing data.
+## Scenario Coverage
 
-## Manual Helpers
+The E2E suite is table-driven around loader behavior, not helper functions. The current scenarios cover:
 
-The shell helpers remain available for direct Elasticsearch-only setup and debugging:
+- `-delete -sync-managed -enrich`
+  Recreates the index, applies managed resources, loads data, refreshes, and executes enrich.
+- `-flush`
+  Replaces document data only and leaves managed resources alone.
+- `-flush -sync-managed`
+  Replaces document data and ensures pipelines and policies exist.
+- `-add`
+  Appends data only.
+- `-add -sync-managed`
+  Appends data and ensures pipelines and policies exist.
+- `-delete`
+  Verifies the safe failure path when another pipeline still references a policy being deleted.
+- `-nuke`
+  Removes the source index and declared managed resources, while preserving dependent indices and clearing their `index.default_pipeline` if needed.
+- `-nuke -delete -sync-managed`
+  Forces teardown first, then performs a clean rebuild.
+- `-enrich` with no policy file
+  Warns and skips enrich execution cleanly.
+- `-enrich=<known>,<missing>`
+  Warns for unknown policies and still executes the known policy.
 
-- [setup.sh](setup.sh)
-- [create-target.sh](create-target.sh)
+Verbose mode prints the flag set and the intended checks for each scenario so the terminal output is easier to scan than a plain `ok`.
+
+## What The Assertions Check
+
+The suite checks Elasticsearch outcomes, not just process exit codes.
+
+Depending on the scenario, assertions include:
+
+- index exists or is missing
+- document counts
+- default pipeline settings
+- mapping fields present or absent
+- pipeline exists or is missing
+- policy exists or is missing
+- enrich backing index exists
+- sample computed fields from ingest pipelines
+- sample enriched fields from enrich execution
+- expected failure output for safe conflict paths
+
+This matters most for destructive flows. For example, the `-delete` conflict test verifies that the source index and source pipeline are gone, while the blocked policy still exists because another pipeline still references it.
+
+## Fixtures
+
+The Go E2E suite writes its own scenario-specific fixtures at runtime. That keeps the scenarios independent and lets each test vary settings, mappings, pipelines, policies, and data without colliding with another test.
+
+The older shell fixture files under [`fixtures/`](fixtures) still exist for `run.sh` and manual debugging:
+
+- [`fixtures/index1-settings.json`](fixtures/index1-settings.json)
+- [`fixtures/index1-mappings.json`](fixtures/index1-mappings.json)
+- [`fixtures/index1-pipelines.json`](fixtures/index1-pipelines.json)
+- [`fixtures/index1-policies.json`](fixtures/index1-policies.json)
+- [`fixtures/index1-data.json`](fixtures/index1-data.json)
+- [`fixtures/index2-settings.json`](fixtures/index2-settings.json)
+- [`fixtures/index2-mappings.json`](fixtures/index2-mappings.json)
+- [`fixtures/index2-pipelines.json`](fixtures/index2-pipelines.json)
+- [`fixtures/index2-data.json`](fixtures/index2-data.json)
+
+That split is intentional:
+
+- the shell path is a concrete operator smoke test
+- the Go path is the fuller scenario matrix for CLI behavior
+
+## Shell Helpers
+
+These files support the shell-driven smoke test and manual troubleshooting:
+
+- [`run.sh`](run.sh)
+- [`verify.sh`](verify.sh)
+- [`setup.sh`](setup.sh)
+- [`create-target.sh`](create-target.sh)
+- [`compose.yaml`](compose.yaml)
+
+They are still useful, but they are not the main behavioral test path anymore. The Go tagged E2E suite is.

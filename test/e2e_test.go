@@ -1,0 +1,1129 @@
+//go:build e2e
+
+package e2e
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net"
+	"net/http"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
+	"strings"
+	"testing"
+	"time"
+)
+
+type testEnv struct {
+	repoRoot      string
+	binaryPath    string
+	containerName string
+	esURL         string
+	httpClient    *http.Client
+}
+
+type scenarioContext struct {
+	env *testEnv
+
+	prefix string
+
+	sourceIndex string
+	targetIndex string
+
+	sourcePipelinePrimary   string
+	sourcePipelineSecondary string
+	sourcePolicy            string
+
+	altSourcePipelinePrimary   string
+	altSourcePipelineSecondary string
+	altSourcePolicy            string
+
+	targetPipelinePrimary   string
+	targetPipelineSecondary string
+
+	fixturesRoot       string
+	sourceBaseDir      string
+	sourceSyncDir      string
+	sourceReplaceDir   string
+	sourceAppendDir    string
+	targetReferenceDir string
+}
+
+type commandResult struct {
+	output string
+	err    error
+}
+
+type scenario struct {
+	name   string
+	flags  string
+	checks string
+	run    func(t *testing.T, ctx *scenarioContext)
+}
+
+var sharedEnv *testEnv
+
+func TestMain(m *testing.M) {
+	env, err := setupTestEnv()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "e2e setup failed: %v\n", err)
+		os.Exit(1)
+	}
+	sharedEnv = env
+
+	code := m.Run()
+
+	if err := teardownTestEnv(env); err != nil {
+		fmt.Fprintf(os.Stderr, "e2e teardown failed: %v\n", err)
+		if code == 0 {
+			code = 1
+		}
+	}
+
+	os.Exit(code)
+}
+
+func TestEndToEndScenarios(t *testing.T) {
+	scenarios := []scenario{
+		{
+			name:   "delete_sync-managed_enrich",
+			flags:  "-delete -sync-managed -enrich",
+			checks: "index recreated, pipelines and policies recreated, enrich executed, computed fields present",
+			run:    scenarioDeleteSyncManagedEnrich,
+		},
+		{
+			name:   "flush",
+			flags:  "-flush",
+			checks: "documents replaced, settings and mappings preserved, managed resources untouched",
+			run:    scenarioFlush,
+		},
+		{
+			name:   "flush_sync-managed",
+			flags:  "-flush -sync-managed",
+			checks: "documents replaced, settings and mappings preserved, pipelines and policies ensured",
+			run:    scenarioFlushSyncManaged,
+		},
+		{
+			name:   "add",
+			flags:  "-add",
+			checks: "documents appended, managed resources untouched",
+			run:    scenarioAdd,
+		},
+		{
+			name:   "add_sync-managed",
+			flags:  "-add -sync-managed",
+			checks: "documents appended, pipelines and policies ensured",
+			run:    scenarioAddSyncManaged,
+		},
+		{
+			name:   "delete_referenced_policy_fails",
+			flags:  "-delete",
+			checks: "safe failure when another pipeline still references the enrich policy",
+			run:    scenarioDeleteReferencedPolicyFails,
+		},
+		{
+			name:   "nuke",
+			flags:  "-nuke",
+			checks: "source index and managed resources removed, dependent index survives with default pipeline cleared",
+			run:    scenarioNuke,
+		},
+		{
+			name:   "nuke_delete_sync-managed",
+			flags:  "-nuke -delete -sync-managed",
+			checks: "full teardown first, then clean rebuild, dependent index preserved without default pipeline",
+			run:    scenarioNukeDeleteSyncManaged,
+		},
+		{
+			name:   "enrich_missing_policies",
+			flags:  "-delete -enrich",
+			checks: "warns cleanly when no policies exist and skips enrich execution",
+			run:    scenarioEnrichMissingPolicies,
+		},
+		{
+			name:   "enrich_explicit_unknown_policy",
+			flags:  "-add -enrich=<known>,<missing>",
+			checks: "warns for unknown policy names and still executes the known policy",
+			run:    scenarioEnrichExplicitUnknownPolicy,
+		},
+	}
+
+	for i, sc := range scenarios {
+		sc := sc
+		t.Run(sc.name, func(t *testing.T) {
+			t.Logf("flags: %s", sc.flags)
+			t.Logf("checks: %s", sc.checks)
+
+			ctx := newScenarioContext(t, fmt.Sprintf("e2e-%02d", i+1))
+			ctx.cleanup(t)
+			t.Cleanup(func() {
+				ctx.cleanup(t)
+			})
+			sc.run(t, ctx)
+		})
+	}
+}
+
+func scenarioDeleteSyncManagedEnrich(t *testing.T, ctx *scenarioContext) {
+	result := runLoader(t, ctx, nil, sourceArgs(ctx, ctx.sourceBaseDir, "-delete", true, true, ""))
+	mustSucceed(t, result)
+
+	assertIndexExists(t, ctx, ctx.sourceIndex)
+	assertDocCount(t, ctx, ctx.sourceIndex, 2)
+	assertDefaultPipeline(t, ctx, ctx.sourceIndex, ctx.sourcePipelinePrimary)
+	assertMappingField(t, ctx, ctx.sourceIndex, "lookup_id")
+	assertPipelineExists(t, ctx, ctx.sourcePipelinePrimary)
+	assertPipelineExists(t, ctx, ctx.sourcePipelineSecondary)
+	assertPolicyExists(t, ctx, ctx.sourcePolicy)
+	assertEnrichBackingIndexExists(t, ctx, ctx.sourcePolicy)
+
+	doc := getDocument(t, ctx, ctx.sourceIndex, "A1")
+	assertEqual(t, nestedString(doc, "_source", "source_label"), "alpha-21")
+	assertEqual(t, nestedFloat(doc, "_source", "calculated_value"), 21)
+}
+
+func scenarioFlush(t *testing.T, ctx *scenarioContext) {
+	mustSucceed(t, runLoader(t, ctx, nil, sourceArgs(ctx, ctx.sourceBaseDir, "-delete", true, true, "")))
+
+	assertDefaultPipeline(t, ctx, ctx.sourceIndex, ctx.sourcePipelinePrimary)
+	assertPipelineExists(t, ctx, ctx.sourcePipelinePrimary)
+
+	result := runLoader(t, ctx, nil, sourceArgs(ctx, ctx.sourceReplaceDir, "-flush", false, false, ""))
+	mustSucceed(t, result)
+
+	assertDocCount(t, ctx, ctx.sourceIndex, 1)
+	assertDefaultPipeline(t, ctx, ctx.sourceIndex, ctx.sourcePipelinePrimary)
+	assertMappingField(t, ctx, ctx.sourceIndex, "lookup_id")
+	assertNoMappingField(t, ctx, ctx.sourceIndex, "new_mapping_only_field")
+	assertPipelineExists(t, ctx, ctx.sourcePipelinePrimary)
+	assertPipelineMissing(t, ctx, ctx.altSourcePipelinePrimary)
+	assertPolicyExists(t, ctx, ctx.sourcePolicy)
+	assertPolicyMissing(t, ctx, ctx.altSourcePolicy)
+
+	doc := getDocument(t, ctx, ctx.sourceIndex, "C3")
+	assertEqual(t, nestedString(doc, "_source", "source_label"), "gamma-20")
+	assertEqual(t, nestedFloat(doc, "_source", "calculated_value"), 20)
+}
+
+func scenarioFlushSyncManaged(t *testing.T, ctx *scenarioContext) {
+	mustSucceed(t, runLoader(t, ctx, nil, sourceArgs(ctx, ctx.sourceBaseDir, "-delete", true, true, "")))
+
+	result := runLoader(t, ctx, nil, sourceArgs(ctx, ctx.sourceSyncDir, "-flush", true, false, ""))
+	mustSucceed(t, result)
+
+	assertDocCount(t, ctx, ctx.sourceIndex, 1)
+	assertDefaultPipeline(t, ctx, ctx.sourceIndex, ctx.sourcePipelinePrimary)
+	assertNoMappingField(t, ctx, ctx.sourceIndex, "new_mapping_only_field")
+	assertPipelineExists(t, ctx, ctx.sourcePipelinePrimary)
+	assertPipelineExists(t, ctx, ctx.altSourcePipelinePrimary)
+	assertPolicyExists(t, ctx, ctx.sourcePolicy)
+	assertPolicyExists(t, ctx, ctx.altSourcePolicy)
+
+	doc := getDocument(t, ctx, ctx.sourceIndex, "C3")
+	assertEqual(t, nestedString(doc, "_source", "source_label"), "gamma-20")
+	assertMissingField(t, doc, "_source", "pipeline_version")
+}
+
+func scenarioAdd(t *testing.T, ctx *scenarioContext) {
+	mustSucceed(t, runLoader(t, ctx, nil, sourceArgs(ctx, ctx.sourceBaseDir, "-delete", true, false, "")))
+
+	result := runLoader(t, ctx, nil, sourceArgs(ctx, ctx.sourceReplaceDir, "-add", false, false, ""))
+	mustSucceed(t, result)
+
+	assertDocCount(t, ctx, ctx.sourceIndex, 3)
+	assertPipelineMissing(t, ctx, ctx.altSourcePipelinePrimary)
+	assertPolicyMissing(t, ctx, ctx.altSourcePolicy)
+	assertNoMappingField(t, ctx, ctx.sourceIndex, "new_mapping_only_field")
+
+	doc := getDocument(t, ctx, ctx.sourceIndex, "C3")
+	assertEqual(t, nestedString(doc, "_source", "source_label"), "gamma-20")
+}
+
+func scenarioAddSyncManaged(t *testing.T, ctx *scenarioContext) {
+	mustSucceed(t, runLoader(t, ctx, nil, sourceArgs(ctx, ctx.sourceBaseDir, "-delete", true, false, "")))
+
+	result := runLoader(t, ctx, nil, sourceArgs(ctx, ctx.sourceSyncDir, "-add", true, false, ""))
+	mustSucceed(t, result)
+
+	assertDocCount(t, ctx, ctx.sourceIndex, 3)
+	assertPipelineExists(t, ctx, ctx.altSourcePipelinePrimary)
+	assertPolicyExists(t, ctx, ctx.altSourcePolicy)
+	assertNoMappingField(t, ctx, ctx.sourceIndex, "new_mapping_only_field")
+
+	doc := getDocument(t, ctx, ctx.sourceIndex, "C3")
+	assertEqual(t, nestedString(doc, "_source", "source_label"), "gamma-20")
+}
+
+func scenarioDeleteReferencedPolicyFails(t *testing.T, ctx *scenarioContext) {
+	mustSucceed(t, runLoader(t, ctx, nil, sourceArgs(ctx, ctx.sourceBaseDir, "-delete", true, true, "")))
+	mustSucceed(t, runLoader(t, ctx, nil, targetArgs(ctx, "-delete", true)))
+
+	result := runLoader(t, ctx, nil, sourceArgs(ctx, ctx.sourceBaseDir, "-delete", true, false, ""))
+	mustFailWith(t, result, "Failed to delete enrich policy")
+	mustContain(t, result.output, "referencing it")
+
+	assertIndexMissing(t, ctx, ctx.sourceIndex)
+	assertPipelineMissing(t, ctx, ctx.sourcePipelinePrimary)
+	assertPolicyExists(t, ctx, ctx.sourcePolicy)
+	assertPipelineExists(t, ctx, ctx.targetPipelinePrimary)
+}
+
+func scenarioNuke(t *testing.T, ctx *scenarioContext) {
+	mustSucceed(t, runLoader(t, ctx, nil, sourceArgs(ctx, ctx.sourceBaseDir, "-delete", true, true, "")))
+	mustSucceed(t, runLoader(t, ctx, nil, targetArgs(ctx, "-delete", true)))
+
+	result := runLoader(t, ctx, nil, nukeArgs(ctx))
+	mustSucceed(t, result)
+
+	assertIndexMissing(t, ctx, ctx.sourceIndex)
+	assertPolicyMissing(t, ctx, ctx.sourcePolicy)
+	assertPipelineMissing(t, ctx, ctx.sourcePipelinePrimary)
+	assertPipelineMissing(t, ctx, ctx.targetPipelinePrimary)
+	assertIndexExists(t, ctx, ctx.targetIndex)
+	assertNoDefaultPipeline(t, ctx, ctx.targetIndex)
+}
+
+func scenarioNukeDeleteSyncManaged(t *testing.T, ctx *scenarioContext) {
+	mustSucceed(t, runLoader(t, ctx, nil, sourceArgs(ctx, ctx.sourceBaseDir, "-delete", true, true, "")))
+	mustSucceed(t, runLoader(t, ctx, nil, targetArgs(ctx, "-delete", true)))
+
+	result := runLoader(t, ctx, nil, sourceArgsWithNuke(ctx, ctx.sourceBaseDir, "-delete", true, true, ""))
+	mustSucceed(t, result)
+
+	assertIndexExists(t, ctx, ctx.sourceIndex)
+	assertDocCount(t, ctx, ctx.sourceIndex, 2)
+	assertPipelineExists(t, ctx, ctx.sourcePipelinePrimary)
+	assertPolicyExists(t, ctx, ctx.sourcePolicy)
+	assertEnrichBackingIndexExists(t, ctx, ctx.sourcePolicy)
+	assertPipelineMissing(t, ctx, ctx.targetPipelinePrimary)
+	assertIndexExists(t, ctx, ctx.targetIndex)
+	assertNoDefaultPipeline(t, ctx, ctx.targetIndex)
+}
+
+func scenarioEnrichMissingPolicies(t *testing.T, ctx *scenarioContext) {
+	result := runLoader(t, ctx, nil, sourceArgsNoPolicies(ctx, "-delete", false, true, ""))
+	mustSucceed(t, result)
+	mustContain(t, result.output, "No enrich policies found; skipping enrich execution")
+
+	assertIndexExists(t, ctx, ctx.sourceIndex)
+	assertDocCount(t, ctx, ctx.sourceIndex, 2)
+	assertPolicyMissing(t, ctx, ctx.sourcePolicy)
+}
+
+func scenarioEnrichExplicitUnknownPolicy(t *testing.T, ctx *scenarioContext) {
+	mustSucceed(t, runLoader(t, ctx, nil, sourceArgs(ctx, ctx.sourceBaseDir, "-delete", true, true, "")))
+
+	result := runLoader(t, ctx, nil, sourceArgs(ctx, ctx.sourceAppendDir, "-add", false, true, ctx.sourcePolicy+",missing-policy"))
+	mustSucceed(t, result)
+	mustContain(t, result.output, "Enrich policy not found; skipping")
+	mustContain(t, result.output, ctx.sourcePolicy)
+
+	assertDocCount(t, ctx, ctx.sourceIndex, 3)
+	assertEnrichBackingIndexExists(t, ctx, ctx.sourcePolicy)
+}
+
+func setupTestEnv() (*testEnv, error) {
+	repoRoot, err := repoRoot()
+	if err != nil {
+		return nil, err
+	}
+
+	tmpDir, err := os.MkdirTemp("", "esbl-e2e-*")
+	if err != nil {
+		return nil, err
+	}
+
+	binaryPath := filepath.Join(tmpDir, "es-bulk-loader")
+	buildCmd := exec.Command("go", "build", "-o", binaryPath, "./cmd/es-bulk-loader")
+	buildCmd.Dir = repoRoot
+	if output, err := buildCmd.CombinedOutput(); err != nil {
+		return nil, fmt.Errorf("build binary: %w\n%s", err, string(output))
+	}
+
+	containerName := fmt.Sprintf("esbl-e2e-%d", time.Now().UnixNano())
+	port, err := startElasticsearchContainer(containerName)
+	if err != nil {
+		_ = os.RemoveAll(tmpDir)
+		return nil, err
+	}
+
+	esURL := fmt.Sprintf("http://127.0.0.1:%s", port)
+	env := &testEnv{
+		repoRoot:      repoRoot,
+		binaryPath:    binaryPath,
+		containerName: containerName,
+		esURL:         esURL,
+		httpClient:    &http.Client{Timeout: 10 * time.Second},
+	}
+
+	if err := waitForCluster(env); err != nil {
+		_ = teardownTestEnv(env)
+		return nil, err
+	}
+
+	return env, nil
+}
+
+func teardownTestEnv(env *testEnv) error {
+	var errs []string
+	if env.containerName != "" {
+		cmd := exec.Command("docker", "rm", "-f", env.containerName)
+		if output, err := cmd.CombinedOutput(); err != nil && !strings.Contains(string(output), "No such container") {
+			errs = append(errs, fmt.Sprintf("remove container: %v (%s)", err, strings.TrimSpace(string(output))))
+		}
+	}
+	if env.binaryPath != "" {
+		if err := os.RemoveAll(filepath.Dir(env.binaryPath)); err != nil {
+			errs = append(errs, fmt.Sprintf("remove temp dir: %v", err))
+		}
+	}
+	if len(errs) > 0 {
+		return fmt.Errorf("%s", strings.Join(errs, "; "))
+	}
+	return nil
+}
+
+func repoRoot() (string, error) {
+	_, filename, _, ok := runtime.Caller(0)
+	if !ok {
+		return "", fmt.Errorf("unable to determine caller path")
+	}
+	return filepath.Clean(filepath.Join(filepath.Dir(filename), "..")), nil
+}
+
+func startElasticsearchContainer(containerName string) (string, error) {
+	cmd := exec.Command(
+		"docker", "run", "-d", "-P", "--name", containerName,
+		"-e", "discovery.type=single-node",
+		"-e", "xpack.security.enabled=false",
+		"-e", "xpack.license.self_generated.type=basic",
+		"-e", "ES_JAVA_OPTS=-Xms512m -Xmx512m",
+		"docker.elastic.co/elasticsearch/elasticsearch:9.3.1",
+	)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("docker run elasticsearch: %w\n%s", err, string(output))
+	}
+
+	portCmd := exec.Command("docker", "port", containerName, "9200/tcp")
+	portOutput, err := portCmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("docker port: %w\n%s", err, string(portOutput))
+	}
+
+	host, port, err := net.SplitHostPort(strings.TrimSpace(string(portOutput)))
+	if err != nil {
+		return "", fmt.Errorf("parse docker port output %q: %w", strings.TrimSpace(string(portOutput)), err)
+	}
+	if host == "0.0.0.0" || host == "::" {
+		return port, nil
+	}
+	return port, nil
+}
+
+func waitForCluster(env *testEnv) error {
+	deadline := time.Now().Add(90 * time.Second)
+	for time.Now().Before(deadline) {
+		req, _ := http.NewRequest(http.MethodGet, env.esURL+"/_cluster/health?wait_for_status=yellow&timeout=1s", nil)
+		resp, err := env.httpClient.Do(req)
+		if err == nil {
+			_ = resp.Body.Close()
+			if resp.StatusCode == http.StatusOK {
+				return nil
+			}
+		}
+		time.Sleep(2 * time.Second)
+	}
+
+	logsCmd := exec.Command("docker", "logs", env.containerName)
+	logs, _ := logsCmd.CombinedOutput()
+	return fmt.Errorf("elasticsearch did not become ready at %s\n%s", env.esURL, string(logs))
+}
+
+func newScenarioContext(t *testing.T, prefix string) *scenarioContext {
+	t.Helper()
+
+	root := t.TempDir()
+	ctx := &scenarioContext{
+		env: sharedEnv,
+
+		prefix: prefix,
+
+		sourceIndex: prefix + "-source",
+		targetIndex: prefix + "-target",
+
+		sourcePipelinePrimary:   prefix + "-source-default",
+		sourcePipelineSecondary: prefix + "-source-secondary",
+		sourcePolicy:            prefix + "-source-policy",
+
+		altSourcePipelinePrimary:   prefix + "-source-sync-default",
+		altSourcePipelineSecondary: prefix + "-source-sync-secondary",
+		altSourcePolicy:            prefix + "-source-sync-policy",
+
+		targetPipelinePrimary:   prefix + "-target-enrich",
+		targetPipelineSecondary: prefix + "-target-secondary",
+
+		fixturesRoot:       root,
+		sourceBaseDir:      filepath.Join(root, "source-base"),
+		sourceSyncDir:      filepath.Join(root, "source-sync"),
+		sourceReplaceDir:   filepath.Join(root, "source-replace"),
+		sourceAppendDir:    filepath.Join(root, "source-append"),
+		targetReferenceDir: filepath.Join(root, "target-reference"),
+	}
+
+	ctx.writeFixtures(t)
+	return ctx
+}
+
+func (ctx *scenarioContext) writeFixtures(t *testing.T) {
+	t.Helper()
+
+	writeFixtureDir(t, ctx.sourceBaseDir, map[string]string{
+		"settings.json": sourceSettingsJSON,
+		"mappings.json": sourceBaseMappingsJSON,
+		"pipelines.json": strings.TrimSpace(fmt.Sprintf(sourcePipelinesJSON,
+			"$SOURCE_PIPELINE_PRIMARY", "$SOURCE_PIPELINE_SECONDARY",
+		)),
+		"policies.json": strings.TrimSpace(fmt.Sprintf(sourcePoliciesJSON, "$SOURCE_POLICY")),
+		"data.json":     sourceInitialDataJSON,
+	})
+
+	writeFixtureDir(t, ctx.sourceSyncDir, map[string]string{
+		"settings.json": sourceSettingsJSON,
+		"mappings.json": sourceSyncMappingsJSON,
+		"pipelines.json": strings.TrimSpace(fmt.Sprintf(sourceSyncPipelinesJSON,
+			"$ALT_SOURCE_PIPELINE_PRIMARY", "$ALT_SOURCE_PIPELINE_SECONDARY",
+		)),
+		"policies.json": strings.TrimSpace(fmt.Sprintf(sourceSyncPoliciesJSON, "$ALT_SOURCE_POLICY")),
+		"data.json":     sourceReplacementDataJSON,
+	})
+
+	writeFixtureDir(t, ctx.sourceReplaceDir, map[string]string{
+		"settings.json": sourceSettingsJSON,
+		"mappings.json": sourceSyncMappingsJSON,
+		"pipelines.json": strings.TrimSpace(fmt.Sprintf(sourceSyncPipelinesJSON,
+			"$ALT_SOURCE_PIPELINE_PRIMARY", "$ALT_SOURCE_PIPELINE_SECONDARY",
+		)),
+		"policies.json": strings.TrimSpace(fmt.Sprintf(sourceSyncPoliciesJSON, "$ALT_SOURCE_POLICY")),
+		"data.json":     sourceReplacementDataJSON,
+	})
+
+	writeFixtureDir(t, ctx.sourceAppendDir, map[string]string{
+		"settings.json": sourceSettingsJSON,
+		"mappings.json": sourceSyncMappingsJSON,
+		"pipelines.json": strings.TrimSpace(fmt.Sprintf(sourceSyncPipelinesJSON,
+			"$ALT_SOURCE_PIPELINE_PRIMARY", "$ALT_SOURCE_PIPELINE_SECONDARY",
+		)),
+		"policies.json": strings.TrimSpace(fmt.Sprintf(sourceSyncPoliciesJSON, "$ALT_SOURCE_POLICY")),
+		"data.json":     sourceAppendDataJSON,
+	})
+
+	writeFixtureDir(t, ctx.targetReferenceDir, map[string]string{
+		"settings.json": targetSettingsJSON,
+		"mappings.json": targetMappingsJSON,
+		"pipelines.json": strings.TrimSpace(fmt.Sprintf(targetPipelinesJSON,
+			"$TARGET_PIPELINE_PRIMARY", "$SOURCE_POLICY_NAME", "$TARGET_PIPELINE_SECONDARY",
+		)),
+		"data.json": targetDataJSON,
+	})
+}
+
+func (ctx *scenarioContext) cleanup(t *testing.T) {
+	t.Helper()
+
+	deleteIndexIfExists(t, ctx, ctx.targetIndex)
+	deleteIndexIfExists(t, ctx, ctx.sourceIndex)
+
+	deletePipelineIfExists(t, ctx, ctx.targetPipelinePrimary)
+	deletePipelineIfExists(t, ctx, ctx.targetPipelineSecondary)
+	deletePipelineIfExists(t, ctx, ctx.sourcePipelinePrimary)
+	deletePipelineIfExists(t, ctx, ctx.sourcePipelineSecondary)
+	deletePipelineIfExists(t, ctx, ctx.altSourcePipelinePrimary)
+	deletePipelineIfExists(t, ctx, ctx.altSourcePipelineSecondary)
+
+	deletePolicyIfExists(t, ctx, ctx.altSourcePolicy)
+	deletePolicyIfExists(t, ctx, ctx.sourcePolicy)
+}
+
+func writeFixtureDir(t *testing.T, dir string, files map[string]string) {
+	t.Helper()
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("mkdir %s: %v", dir, err)
+	}
+	for name, content := range files {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(content+"\n"), 0o644); err != nil {
+			t.Fatalf("write %s: %v", filepath.Join(dir, name), err)
+		}
+	}
+}
+
+func runLoader(t *testing.T, ctx *scenarioContext, extraEnv map[string]string, args []string) commandResult {
+	t.Helper()
+
+	cmd := exec.Command(ctx.env.binaryPath, args...)
+	cmd.Dir = ctx.env.repoRoot
+
+	env := append(os.Environ(),
+		"SOURCE_PIPELINE_PRIMARY="+ctx.sourcePipelinePrimary,
+		"SOURCE_PIPELINE_SECONDARY="+ctx.sourcePipelineSecondary,
+		"SOURCE_POLICY="+ctx.sourcePolicy,
+		"ALT_SOURCE_PIPELINE_PRIMARY="+ctx.altSourcePipelinePrimary,
+		"ALT_SOURCE_PIPELINE_SECONDARY="+ctx.altSourcePipelineSecondary,
+		"ALT_SOURCE_POLICY="+ctx.altSourcePolicy,
+		"TARGET_PIPELINE_PRIMARY="+ctx.targetPipelinePrimary,
+		"TARGET_PIPELINE_SECONDARY="+ctx.targetPipelineSecondary,
+		"SOURCE_POLICY_NAME="+ctx.sourcePolicy,
+	)
+	for key, value := range extraEnv {
+		env = append(env, key+"="+value)
+	}
+	cmd.Env = env
+
+	output, err := cmd.CombinedOutput()
+	return commandResult{output: string(output), err: err}
+}
+
+func sourceArgs(ctx *scenarioContext, fixtureDir, action string, syncManaged, enrich bool, enrichValue string) []string {
+	args := []string{
+		"-url", ctx.env.esURL,
+		"-index", ctx.sourceIndex,
+		"-settings", filepath.Join(fixtureDir, "settings.json"),
+		"-mappings", filepath.Join(fixtureDir, "mappings.json"),
+		"-pipelines", filepath.Join(fixtureDir, "pipelines.json"),
+		"-policies", filepath.Join(fixtureDir, "policies.json"),
+		"-data", filepath.Join(fixtureDir, "data.json"),
+		"-id", "lookup_id",
+		action,
+	}
+	if syncManaged {
+		args = append(args, "-sync-managed")
+	}
+	if enrich {
+		if enrichValue == "" {
+			args = append(args, "-enrich")
+		} else {
+			args = append(args, "-enrich="+enrichValue)
+		}
+	}
+	return args
+}
+
+func sourceArgsNoPolicies(ctx *scenarioContext, action string, syncManaged, enrich bool, enrichValue string) []string {
+	args := []string{
+		"-url", ctx.env.esURL,
+		"-index", ctx.sourceIndex,
+		"-settings", filepath.Join(ctx.sourceBaseDir, "settings.json"),
+		"-mappings", filepath.Join(ctx.sourceBaseDir, "mappings.json"),
+		"-data", filepath.Join(ctx.sourceBaseDir, "data.json"),
+		"-id", "lookup_id",
+		action,
+	}
+	if syncManaged {
+		args = append(args, "-sync-managed")
+	}
+	if enrich {
+		if enrichValue == "" {
+			args = append(args, "-enrich")
+		} else {
+			args = append(args, "-enrich="+enrichValue)
+		}
+	}
+	return args
+}
+
+func sourceArgsWithNuke(ctx *scenarioContext, fixtureDir, action string, syncManaged, enrich bool, enrichValue string) []string {
+	args := sourceArgs(ctx, fixtureDir, action, syncManaged, enrich, enrichValue)
+	return append(args, "-nuke")
+}
+
+func targetArgs(ctx *scenarioContext, action string, syncManaged bool) []string {
+	args := []string{
+		"-url", ctx.env.esURL,
+		"-index", ctx.targetIndex,
+		"-settings", filepath.Join(ctx.targetReferenceDir, "settings.json"),
+		"-mappings", filepath.Join(ctx.targetReferenceDir, "mappings.json"),
+		"-pipelines", filepath.Join(ctx.targetReferenceDir, "pipelines.json"),
+		"-data", filepath.Join(ctx.targetReferenceDir, "data.json"),
+		"-id", "lookup_id",
+		action,
+	}
+	if syncManaged {
+		args = append(args, "-sync-managed")
+	}
+	return args
+}
+
+func nukeArgs(ctx *scenarioContext) []string {
+	return []string{
+		"-url", ctx.env.esURL,
+		"-index", ctx.sourceIndex,
+		"-pipelines", filepath.Join(ctx.sourceBaseDir, "pipelines.json"),
+		"-policies", filepath.Join(ctx.sourceBaseDir, "policies.json"),
+		"-nuke",
+	}
+}
+
+func assertIndexExists(t *testing.T, ctx *scenarioContext, index string) {
+	t.Helper()
+	if !indexExists(t, ctx, index) {
+		t.Fatalf("expected index %q to exist", index)
+	}
+}
+
+func assertIndexMissing(t *testing.T, ctx *scenarioContext, index string) {
+	t.Helper()
+	if indexExists(t, ctx, index) {
+		t.Fatalf("expected index %q to be missing", index)
+	}
+}
+
+func indexExists(t *testing.T, ctx *scenarioContext, index string) bool {
+	t.Helper()
+	resp := doRequest(t, ctx, http.MethodHead, "/"+index, nil)
+	defer resp.Body.Close()
+	return resp.StatusCode == http.StatusOK
+}
+
+func assertDocCount(t *testing.T, ctx *scenarioContext, index string, want int) {
+	t.Helper()
+	refreshIndex(t, ctx, index)
+	var response struct {
+		Count int `json:"count"`
+	}
+	readJSON(t, doRequest(t, ctx, http.MethodGet, "/"+index+"/_count", nil), &response)
+	if response.Count != want {
+		t.Fatalf("doc count for %s = %d, want %d", index, response.Count, want)
+	}
+}
+
+func assertDefaultPipeline(t *testing.T, ctx *scenarioContext, index, want string) {
+	t.Helper()
+	var response map[string]map[string]map[string]map[string]string
+	readJSON(t, doRequest(t, ctx, http.MethodGet, "/"+index+"/_settings?filter_path=*.settings.index.default_pipeline", nil), &response)
+	got := response[index]["settings"]["index"]["default_pipeline"]
+	if got != want {
+		t.Fatalf("default pipeline for %s = %q, want %q", index, got, want)
+	}
+}
+
+func assertNoDefaultPipeline(t *testing.T, ctx *scenarioContext, index string) {
+	t.Helper()
+	var response map[string]map[string]map[string]map[string]string
+	readJSON(t, doRequest(t, ctx, http.MethodGet, "/"+index+"/_settings?filter_path=*.settings.index.default_pipeline", nil), &response)
+	if settings, ok := response[index]; ok {
+		if indexSettings, ok := settings["settings"]["index"]; ok {
+			if got := indexSettings["default_pipeline"]; got != "" && got != "null" {
+				t.Fatalf("expected no default pipeline for %s, got %q", index, got)
+			}
+		}
+	}
+}
+
+func assertMappingField(t *testing.T, ctx *scenarioContext, index, field string) {
+	t.Helper()
+	if !mappingFieldExists(t, ctx, index, field) {
+		t.Fatalf("expected mapping field %q to exist on %s", field, index)
+	}
+}
+
+func assertNoMappingField(t *testing.T, ctx *scenarioContext, index, field string) {
+	t.Helper()
+	if mappingFieldExists(t, ctx, index, field) {
+		t.Fatalf("expected mapping field %q to be absent on %s", field, index)
+	}
+}
+
+func mappingFieldExists(t *testing.T, ctx *scenarioContext, index, field string) bool {
+	t.Helper()
+	var response map[string]map[string]any
+	readJSON(t, doRequest(t, ctx, http.MethodGet, "/"+index+"/_mapping", nil), &response)
+	mappings, ok := response[index]["mappings"].(map[string]any)
+	if !ok {
+		return false
+	}
+	properties, ok := mappings["properties"].(map[string]any)
+	if !ok {
+		return false
+	}
+	_, ok = properties[field]
+	return ok
+}
+
+func assertPipelineExists(t *testing.T, ctx *scenarioContext, name string) {
+	t.Helper()
+	resp := doRequest(t, ctx, http.MethodGet, "/_ingest/pipeline/"+name, nil)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected pipeline %q to exist, status=%d body=%s", name, resp.StatusCode, string(body))
+	}
+}
+
+func assertPipelineMissing(t *testing.T, ctx *scenarioContext, name string) {
+	t.Helper()
+	resp := doRequest(t, ctx, http.MethodGet, "/_ingest/pipeline/"+name, nil)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected pipeline %q to be missing, status=%d body=%s", name, resp.StatusCode, string(body))
+	}
+}
+
+func assertPolicyExists(t *testing.T, ctx *scenarioContext, name string) {
+	t.Helper()
+	resp := doRequest(t, ctx, http.MethodGet, "/_enrich/policy/"+name, nil)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected policy %q to exist, status=%d body=%s", name, resp.StatusCode, string(body))
+	}
+}
+
+func assertPolicyMissing(t *testing.T, ctx *scenarioContext, name string) {
+	t.Helper()
+	resp := doRequest(t, ctx, http.MethodGet, "/_enrich/policy/"+name, nil)
+	body, err := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	if err != nil {
+		t.Fatalf("read policy response: %v", err)
+	}
+	if resp.StatusCode == http.StatusNotFound {
+		return
+	}
+	if resp.StatusCode == http.StatusOK && bytes.Contains(body, []byte(`"policies":[]`)) {
+		return
+	}
+	t.Fatalf("expected policy %q to be missing, status=%d body=%s", name, resp.StatusCode, string(body))
+}
+
+func assertEnrichBackingIndexExists(t *testing.T, ctx *scenarioContext, policy string) {
+	t.Helper()
+	var response []map[string]any
+	readJSON(t, doRequest(t, ctx, http.MethodGet, "/_cat/indices/.enrich-*?format=json", nil), &response)
+	for _, item := range response {
+		if indexName, _ := item["index"].(string); strings.Contains(indexName, policy) {
+			return
+		}
+	}
+	t.Fatalf("expected enrich backing index for policy %q", policy)
+}
+
+func getDocument(t *testing.T, ctx *scenarioContext, index, id string) map[string]any {
+	t.Helper()
+	refreshIndex(t, ctx, index)
+	var response map[string]any
+	readJSON(t, doRequest(t, ctx, http.MethodGet, "/"+index+"/_doc/"+id, nil), &response)
+	return response
+}
+
+func refreshIndex(t *testing.T, ctx *scenarioContext, index string) {
+	t.Helper()
+	resp := doRequest(t, ctx, http.MethodPost, "/"+index+"/_refresh", nil)
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("refresh %s failed: status=%d body=%s", index, resp.StatusCode, string(body))
+	}
+}
+
+func doRequest(t *testing.T, ctx *scenarioContext, method, path string, body []byte) *http.Response {
+	t.Helper()
+	var reader io.Reader
+	if body != nil {
+		reader = bytes.NewReader(body)
+	}
+	req, err := http.NewRequest(method, ctx.env.esURL+path, reader)
+	if err != nil {
+		t.Fatalf("new request %s %s: %v", method, path, err)
+	}
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	resp, err := ctx.env.httpClient.Do(req)
+	if err != nil {
+		t.Fatalf("request %s %s: %v", method, path, err)
+	}
+	return resp
+}
+
+func deleteIndexIfExists(t *testing.T, ctx *scenarioContext, index string) {
+	t.Helper()
+	resp := doRequest(t, ctx, http.MethodDelete, "/"+index, nil)
+	body, _ := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("delete index %s failed: status=%d body=%s", index, resp.StatusCode, string(body))
+	}
+}
+
+func deletePipelineIfExists(t *testing.T, ctx *scenarioContext, name string) {
+	t.Helper()
+	resp := doRequest(t, ctx, http.MethodDelete, "/_ingest/pipeline/"+name, nil)
+	body, _ := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("delete pipeline %s failed: status=%d body=%s", name, resp.StatusCode, string(body))
+	}
+}
+
+func deletePolicyIfExists(t *testing.T, ctx *scenarioContext, name string) {
+	t.Helper()
+	resp := doRequest(t, ctx, http.MethodDelete, "/_enrich/policy/"+name, nil)
+	body, _ := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNotFound {
+		if resp.StatusCode == http.StatusOK && bytes.Contains(body, []byte(`"acknowledged":true`)) {
+			return
+		}
+		t.Fatalf("delete policy %s failed: status=%d body=%s", name, resp.StatusCode, string(body))
+	}
+}
+
+func readJSON(t *testing.T, resp *http.Response, target any) {
+	t.Helper()
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("read response body: %v", err)
+	}
+	if resp.StatusCode >= 300 {
+		t.Fatalf("unexpected status %d: %s", resp.StatusCode, string(body))
+	}
+	if err := json.Unmarshal(body, target); err != nil {
+		t.Fatalf("unmarshal response: %v\nbody=%s", err, string(body))
+	}
+}
+
+func mustSucceed(t *testing.T, result commandResult) {
+	t.Helper()
+	if result.err != nil {
+		t.Fatalf("command failed: %v\n%s", result.err, result.output)
+	}
+}
+
+func mustFailWith(t *testing.T, result commandResult, substring string) {
+	t.Helper()
+	if result.err == nil {
+		t.Fatalf("expected command failure containing %q\n%s", substring, result.output)
+	}
+	mustContain(t, result.output, substring)
+}
+
+func mustContain(t *testing.T, output, substring string) {
+	t.Helper()
+	if !strings.Contains(output, substring) {
+		t.Fatalf("expected output to contain %q\n%s", substring, output)
+	}
+}
+
+func assertEqual[T comparable](t *testing.T, got, want T) {
+	t.Helper()
+	if got != want {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+}
+
+func nestedString(value map[string]any, path ...string) string {
+	current := nestedValue(value, path...)
+	if s, ok := current.(string); ok {
+		return s
+	}
+	return ""
+}
+
+func nestedFloat(value map[string]any, path ...string) float64 {
+	current := nestedValue(value, path...)
+	if f, ok := current.(float64); ok {
+		return f
+	}
+	return 0
+}
+
+func assertMissingField(t *testing.T, value map[string]any, path ...string) {
+	t.Helper()
+	if nestedValue(value, path...) != nil {
+		t.Fatalf("expected field %v to be absent", path)
+	}
+}
+
+func nestedValue(value map[string]any, path ...string) any {
+	var current any = value
+	for _, part := range path {
+		object, ok := current.(map[string]any)
+		if !ok {
+			return nil
+		}
+		current = object[part]
+		if current == nil {
+			return nil
+		}
+	}
+	return current
+}
+
+const sourceSettingsJSON = `{"settings":{}}`
+
+const sourceBaseMappingsJSON = `{
+  "mappings": {
+    "properties": {
+      "lookup_id": { "type": "keyword" },
+      "base_value": { "type": "integer" },
+      "multiplier": { "type": "integer" },
+      "source_name": { "type": "keyword" },
+      "source_label": { "type": "keyword" },
+      "calculated_value": { "type": "integer" }
+    }
+  }
+}`
+
+const sourceSyncMappingsJSON = `{
+  "mappings": {
+    "properties": {
+      "lookup_id": { "type": "keyword" },
+      "base_value": { "type": "integer" },
+      "multiplier": { "type": "integer" },
+      "source_name": { "type": "keyword" },
+      "source_label": { "type": "keyword" },
+      "calculated_value": { "type": "integer" },
+      "pipeline_version": { "type": "integer" },
+      "new_mapping_only_field": { "type": "keyword" }
+    }
+  }
+}`
+
+const sourcePipelinesJSON = `{
+  "%s": {
+    "description": "Default source pipeline",
+    "processors": [
+      {
+        "script": {
+          "lang": "painless",
+          "source": "ctx.calculated_value = ctx.base_value * ctx.multiplier; ctx.source_label = ctx.source_name + '-' + ctx.calculated_value;"
+        }
+      }
+    ]
+  },
+  "%s": {
+    "description": "Secondary source pipeline",
+    "processors": [
+      {
+        "set": {
+          "field": "secondary_pipeline_ran",
+          "value": true
+        }
+      }
+    ]
+  }
+}`
+
+const sourceSyncPipelinesJSON = `{
+  "%s": {
+    "description": "Synced source pipeline",
+    "processors": [
+      {
+        "script": {
+          "lang": "painless",
+          "source": "ctx.calculated_value = ctx.base_value * ctx.multiplier; ctx.source_label = ctx.source_name + '-' + ctx.calculated_value; ctx.pipeline_version = 2;"
+        }
+      }
+    ]
+  },
+  "%s": {
+    "description": "Secondary synced source pipeline",
+    "processors": [
+      {
+        "set": {
+          "field": "secondary_pipeline_ran",
+          "value": true
+        }
+      }
+    ]
+  }
+}`
+
+const sourcePoliciesJSON = `{
+  "%s": {
+    "match": {
+      "indices": "${INDEX}",
+      "match_field": "lookup_id",
+      "enrich_fields": ["calculated_value", "source_name", "source_label"]
+    }
+  }
+}`
+
+const sourceSyncPoliciesJSON = `{
+  "%s": {
+    "match": {
+      "indices": "${INDEX}",
+      "match_field": "lookup_id",
+      "enrich_fields": ["calculated_value", "source_name", "source_label"]
+    }
+  }
+}`
+
+const sourceInitialDataJSON = `[
+  { "lookup_id": "A1", "base_value": 7, "multiplier": 3, "source_name": "alpha" },
+  { "lookup_id": "B2", "base_value": 5, "multiplier": 4, "source_name": "beta" }
+]`
+
+const sourceReplacementDataJSON = `[
+  { "lookup_id": "C3", "base_value": 4, "multiplier": 5, "source_name": "gamma" }
+]`
+
+const sourceAppendDataJSON = `[
+  { "lookup_id": "C3", "base_value": 4, "multiplier": 5, "source_name": "gamma" }
+]`
+
+const targetSettingsJSON = `{"settings":{}}`
+
+const targetMappingsJSON = `{
+  "mappings": {
+    "properties": {
+      "lookup_id": { "type": "keyword" },
+      "target_name": { "type": "keyword" },
+      "source_enrich": {
+        "properties": {
+          "calculated_value": { "type": "integer" },
+          "source_name": { "type": "keyword" },
+          "source_label": { "type": "keyword" }
+        }
+      }
+    }
+  }
+}`
+
+const targetPipelinesJSON = `{
+  "%s": {
+    "description": "Target enrich pipeline",
+    "processors": [
+      {
+        "enrich": {
+          "policy_name": "%s",
+          "field": "lookup_id",
+          "target_field": "source_enrich",
+          "max_matches": 1,
+          "ignore_missing": false
+        }
+      }
+    ]
+  },
+  "%s": {
+    "description": "Secondary target pipeline",
+    "processors": [
+      {
+        "set": {
+          "field": "secondary_pipeline_ran",
+          "value": true
+        }
+      }
+    ]
+  }
+}`
+
+const targetDataJSON = `[
+  { "lookup_id": "A1", "target_name": "first" },
+  { "lookup_id": "B2", "target_name": "second" }
+]`
