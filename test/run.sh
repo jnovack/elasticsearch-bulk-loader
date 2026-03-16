@@ -73,6 +73,7 @@ run_loader \
   -batch 2 \
   -id lookup_id \
   -delete \
+  -sync-managed \
   -enrich
 
 echo "Creating target index, pipelines, and data through es-bulk-loader"
@@ -84,7 +85,8 @@ run_loader \
   -pipelines /fixtures/index2-pipelines.json \
   -data /fixtures/index2-data.json \
   -batch 2 \
-  -delete
+  -delete \
+  -sync-managed
 
 echo "Verifying calculated and enriched fields"
 "${SCRIPT_DIR}/verify.sh"
