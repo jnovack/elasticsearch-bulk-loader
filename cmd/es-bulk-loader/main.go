@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"regexp"
+	"runtime/debug"
 	"slices"
 	"strconv"
 	"strings"
@@ -25,6 +26,12 @@ var (
 	version      = "dev"                  // default if not overridden
 	buildRFC3339 = "1970-01-01T00:00:00Z" // default if not overridden
 	revision     = "local"                // default if not overridden
+)
+
+const (
+	defaultVersion      = "dev"
+	defaultBuildRFC3339 = "1970-01-01T00:00:00Z"
+	defaultRevision     = "local"
 )
 
 type bulkResponse struct {
@@ -138,7 +145,33 @@ func (e *enrichFlagValue) explicitPolicies() []string {
 	return policies
 }
 
+func populateBuildMetadataFromBuildInfo() {
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return
+	}
+
+	if version == defaultVersion && info.Main.Version != "" && info.Main.Version != "(devel)" {
+		version = info.Main.Version
+	}
+
+	for _, setting := range info.Settings {
+		switch setting.Key {
+		case "vcs.revision":
+			if revision == defaultRevision && setting.Value != "" {
+				revision = setting.Value
+			}
+		case "vcs.time":
+			if buildRFC3339 == defaultBuildRFC3339 && setting.Value != "" {
+				buildRFC3339 = setting.Value
+			}
+		}
+	}
+}
+
 func main() {
+	populateBuildMetadataFromBuildInfo()
+
 	// CLI flags
 	url := flag.String("url", "http://localhost:9200", "Elasticsearch URL")
 	insecure := flag.Bool("insecureSkipVerify", false, "Skip TLS verification")
