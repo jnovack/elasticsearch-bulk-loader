@@ -6,7 +6,8 @@ on:
     branches:
       - "**"
     tags:
-      - "v*.*.*"
+      - "v*.*.*" # e.g. PASS on v1.2.3
+      - "!v*-*" # e.g. IGNORE on v1.2.3-pre1
   workflow_dispatch:
 
 jobs:
