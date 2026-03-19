@@ -75,6 +75,90 @@ load-all:
 		-flush
 
 
+test-keeplast: es-reset
+	go run ./cmd/es-bulk-loader \
+		-url ${URL} \
+		-insecureSkipVerify=true \
+		-index slugs \
+		-settings ./examples/slugs/settings.json \
+		-mappings ./examples/slugs/mappings.json \
+		-pipelines ./examples/slugs/pipelines.json \
+		-policies ./examples/slugs/policies.json \
+		-data ./examples/slugs/slugs.json \
+		-id sanitized \
+		-flush \
+		-sync-managed \
+		-enrich
+
+	go run ./cmd/es-bulk-loader \
+		-url ${URL} \
+		-insecureSkipVerify=true \
+		-index slugs \
+		-settings ./examples/slugs/settings.json \
+		-mappings ./examples/slugs/mappings.json \
+		-pipelines ./examples/slugs/pipelines.json \
+		-policies ./examples/slugs/policies.json \
+		-data ./examples/slugs/slugs.json \
+		-id sanitized \
+		-flush \
+		-sync-managed \
+		-enrich
+
+	go run ./cmd/es-bulk-loader \
+		-url ${URL} \
+		-insecureSkipVerify=true \
+		-index slugs \
+		-settings ./examples/slugs/settings.json \
+		-mappings ./examples/slugs/mappings.json \
+		-pipelines ./examples/slugs/pipelines.json \
+		-policies ./examples/slugs/policies.json \
+		-data ./examples/slugs/slugs.json \
+		-id sanitized \
+		-flush \
+		-sync-managed \
+		-enrich
+
+	go run ./cmd/es-bulk-loader \
+		-url ${URL} \
+		-insecureSkipVerify=true \
+		-index cards \
+		-settings ./examples/cards/settings.json \
+		-mappings ./examples/cards/mappings.json \
+		-pipelines ./examples/cards/pipelines.json \
+		-data ./examples/cards/cards.json \
+		-sync-managed \
+		-delete \
+		-alias \
+		-keep-last 2
+
+	go run ./cmd/es-bulk-loader \
+		-url ${URL} \
+		-insecureSkipVerify=true \
+		-index cards \
+		-settings ./examples/cards/settings.json \
+		-mappings ./examples/cards/mappings.json \
+		-pipelines ./examples/cards/pipelines.json \
+		-data ./examples/cards/cards.json \
+		-sync-managed \
+		-delete \
+		-alias \
+		-keep-last 2
+
+	go run ./cmd/es-bulk-loader \
+		-url ${URL} \
+		-insecureSkipVerify=true \
+		-index cards \
+		-settings ./examples/cards/settings.json \
+		-mappings ./examples/cards/mappings.json \
+		-pipelines ./examples/cards/pipelines.json \
+		-data ./examples/cards/cards.json \
+		-sync-managed \
+		-delete \
+		-alias \
+		-keep-last 2
+
+
+
 example:
 	docker run --rm \
 		-v ./examples/slugs:/data:ro es-bulk-loader:dev \
@@ -100,12 +184,12 @@ testing:
 	-settings /data/index1-settings.json \
 	-mappings /data/index1-mappings.json \
 	-pipelines /data/index1-pipelines.json \
-		-policies /data/index1-policies.json \
-		-data /data/index1-data.json \
-		-id lookup_id \
-		-delete \
-		-sync-managed \
-		-enrich
+	-policies /data/index1-policies.json \
+	-data /data/index1-data.json \
+	-id lookup_id \
+	-delete \
+	-sync-managed \
+	-enrich
 
 
 # ----

@@ -83,6 +83,10 @@ The E2E suite is table-driven around loader behavior, not helper functions. The 
   Warns and skips enrich execution cleanly.
 - `-enrich=<known>,<missing>`
   Warns for unknown policies and still executes the known policy.
+- `-delete -alias`
+  Creates a timestamped concrete index and points the alias at it.
+- three runs of `-delete -sync-managed -alias -keep-last=2`
+  Verifies rollover retention by pruning the oldest timestamped index on the third run while pipeline sync remains healthy.
 
 Verbose mode prints the flag set and the intended checks for each scenario so the terminal output is easier to scan than a plain `ok`.
 

@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"runtime/debug"
 	"slices"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -186,6 +187,8 @@ func main() {
 	addToIndex := flag.Bool("add", false, "Add documents to existing index")
 	flushIndex := flag.Bool("flush", false, "Delete all documents from an existing index without deleting the index")
 	syncManaged := flag.Bool("sync-managed", false, "Create or update declared ingest pipelines and enrich policies")
+	aliasMode := flag.Bool("alias", false, "Treat -index as an alias; create timestamped indices as <alias>-YYYYMMDDHHMMSS and repoint the alias on recreate")
+	keepLast := flag.Int("keep-last", 0, "When -alias is set, keep only the newest N timestamped indices matching <alias>-YYYYMMDDHHMMSS (0 disables pruning)")
 	nuke := flag.Bool("nuke", false, "Delete the current index and declared managed resources, including dependent pipelines that reference declared enrich policies")
 	idField := flag.String("id", "", "Field to use to override _id (not normal)")
 	user := flag.String("user", "", "Username for basic auth (optional)")
@@ -230,6 +233,7 @@ func main() {
 		flag.Usage()
 		os.Exit(1)
 	}
+	effectiveSyncManaged := *syncManaged
 
 	if *index == "" {
 		flag.Usage()
@@ -244,6 +248,21 @@ func main() {
 	if action == dataActionNone && !*syncManaged && !*nuke && !enrich.enabled {
 		flag.Usage()
 		os.Exit(1)
+	}
+	if *keepLast < 0 {
+		log.Info().Msg("-keep-last must be 0 or greater")
+		flag.Usage()
+		os.Exit(1)
+	}
+	if *keepLast > 0 && !*aliasMode {
+		log.Warn().Msg("Ignoring -keep-last because -alias is not enabled")
+	}
+	if *aliasMode && action == dataActionDelete && !*syncManaged {
+		effectiveSyncManaged = true
+		log.Warn().Msg("Alias delete detected without -sync-managed; assuming -sync-managed for this run. Add -sync-managed explicitly on the command line.")
+	}
+	if *aliasMode && action == dataActionDelete && *keepLast == 0 {
+		log.Warn().Msg("Alias delete detected without -keep-last; no old timestamped indices will be deleted and storage usage can grow over time.")
 	}
 
 	// Set up Elasticsearch client
@@ -273,21 +292,62 @@ func main() {
 	pipelineDefinitions, pipelineNames := readNamedDefinitions(*pipelinesFile, "pipeline", variables)
 	policyDefinitions, policyNames := readNamedDefinitions(*policiesFile, "policy", variables)
 	defaultPipeline := ""
-	if *syncManaged && len(pipelineNames) > 0 {
+	if effectiveSyncManaged && len(pipelineNames) > 0 {
 		defaultPipeline = pipelineNames[0]
 	}
 
-	// Determine if index exists
-	exists, err := indexExists(es, *index)
-	checkErr("checking if index exists", err)
+	// Determine if target exists
+	aliasTargets := []string(nil)
+	exists := false
+	if *aliasMode {
+		aliasTargets = resolveAliasTargets(es, *index)
+		if len(aliasTargets) == 0 {
+			indexPresent, err := indexExists(es, *index)
+			checkErr("checking if index exists", err)
+			if indexPresent {
+				aliasTargets = []string{*index}
+				log.Warn().Str("index", *index).Msg("Found concrete index with alias name; treating it as the current write target")
+			}
+		}
+		exists = len(aliasTargets) > 0
+		if exists {
+			log.Info().Str("alias", *index).Strs("indices", aliasTargets).Msg("Resolved alias targets")
+		} else {
+			log.Info().Str("alias", *index).Msg("Alias has no current indices")
+		}
+	} else {
+		var err error
+		exists, err = indexExists(es, *index)
+		checkErr("checking if index exists", err)
+	}
 
 	if *nuke {
-		if exists {
-			log.Warn().Str("index", *index).Msg("Nuke deleting index and declared managed resources")
-			deleteAndCheck(es, *index)
+		if *aliasMode {
+			if len(aliasTargets) > 0 {
+				log.Warn().Str("alias", *index).Strs("indices", aliasTargets).Msg("Nuke deleting alias target indices and declared managed resources")
+				deleteIndices(es, aliasTargets)
+				aliasTargets = nil
+			} else {
+				log.Warn().Str("alias", *index).Msg("Alias does not currently resolve to an index. Nuke will still remove declared managed resources")
+			}
+			generations := listTimestampedIndices(es, *index)
+			if len(generations) > 0 {
+				names := make([]string, 0, len(generations))
+				for _, generation := range generations {
+					names = append(names, generation.Name)
+				}
+				log.Warn().Str("alias", *index).Strs("indices", names).Msg("Nuke deleting timestamped indices that match alias pattern")
+				deleteIndices(es, names)
+			}
 			exists = false
 		} else {
-			log.Warn().Str("index", *index).Msg("Index does not exist. Nuke will still remove declared managed resources")
+			if exists {
+				log.Warn().Str("index", *index).Msg("Nuke deleting index and declared managed resources")
+				deleteAndCheck(es, *index)
+				exists = false
+			} else {
+				log.Warn().Str("index", *index).Msg("Index does not exist. Nuke will still remove declared managed resources")
+			}
 		}
 
 		deleteManagedResources(es, pipelineNames, policyNames, true)
@@ -295,60 +355,114 @@ func main() {
 
 	switch action {
 	case dataActionDelete:
-		if exists {
-			log.Info().Str("index", *index).Msg("Deleting index before reloading data")
-			deleteAndCheck(es, *index)
+		if *aliasMode {
+			if len(aliasTargets) > 0 {
+				log.Info().Str("alias", *index).Strs("indices", aliasTargets).Msg("Alias mode delete will roll forward to a new timestamped index")
+			} else {
+				log.Warn().Str("alias", *index).Msg("Alias has no indices. Nothing to delete.")
+			}
 			exists = false
 		} else {
-			log.Warn().Str("index", *index).Msg("Index does not exist. Nothing to delete.")
+			if exists {
+				log.Info().Str("index", *index).Msg("Deleting index before reloading data")
+				deleteAndCheck(es, *index)
+				exists = false
+			} else {
+				log.Warn().Str("index", *index).Msg("Index does not exist. Nothing to delete.")
+			}
 		}
 
-		deleteManagedResources(es, pipelineNames, policyNames, false)
-	case dataActionFlush:
-		if exists {
-			log.Info().Str("index", *index).Msg("Flushing existing index before loading replacement data")
-			flushAndCheck(es, *index)
+		if *aliasMode {
+			log.Info().Str("alias", *index).Msg("Alias mode delete keeps existing managed resources; use -nuke for destructive managed-resource cleanup")
 		} else {
-			log.Warn().Str("index", *index).Msg("Index does not exist. Nothing to flush.")
+			deleteManagedResources(es, pipelineNames, policyNames, false)
+		}
+	case dataActionFlush:
+		if *aliasMode {
+			if len(aliasTargets) > 0 {
+				log.Info().Str("alias", *index).Strs("indices", aliasTargets).Msg("Flushing alias target indices before loading replacement data")
+				for _, target := range aliasTargets {
+					flushAndCheck(es, target)
+				}
+				exists = true
+			} else {
+				log.Warn().Str("alias", *index).Msg("Alias has no indices. Nothing to flush.")
+				exists = false
+			}
+		} else {
+			if exists {
+				log.Info().Str("index", *index).Msg("Flushing existing index before loading replacement data")
+				flushAndCheck(es, *index)
+			} else {
+				log.Warn().Str("index", *index).Msg("Index does not exist. Nothing to flush.")
+			}
 		}
 	case dataActionAdd:
-		if exists {
-			log.Info().Str("index", *index).Msg("Appending documents to existing index")
+		if *aliasMode {
+			if len(aliasTargets) > 0 {
+				log.Info().Str("alias", *index).Strs("indices", aliasTargets).Msg("Appending documents to existing alias target index")
+				exists = true
+			} else {
+				log.Info().Str("alias", *index).Msg("Creating first timestamped index for alias before appending documents")
+				exists = false
+			}
 		} else {
-			log.Info().Str("index", *index).Msg("Creating index to append documents")
+			if exists {
+				log.Info().Str("index", *index).Msg("Appending documents to existing index")
+			} else {
+				log.Info().Str("index", *index).Msg("Creating index to append documents")
+			}
 		}
 	}
 
 	shouldCreateIndex := action.requiresDataFile() && !exists
+	writeIndex := *index
+	createdIndex := ""
+	if *aliasMode && shouldCreateIndex {
+		createdIndex = nextAvailableTimestampedIndexName(es, *index, time.Now().UTC())
+		writeIndex = createdIndex
+		log.Info().Str("alias", *index).Str("index", createdIndex).Msg("Preparing timestamped index for alias")
+	}
 
-	if shouldCreateIndex && *syncManaged {
+	if shouldCreateIndex && effectiveSyncManaged {
 		createPipelines(es, pipelineDefinitions, pipelineNames)
 	}
 
 	// Create index if needed
 	if shouldCreateIndex {
 		body := buildCreateIndexBody(*settingsFile, *mappingsFile, defaultPipeline, variables)
-		res, err := es.Indices.Create(*index, es.Indices.Create.WithBody(strings.NewReader(body)))
+		createIndex := *index
+		if *aliasMode {
+			createIndex = createdIndex
+		}
+		res, err := es.Indices.Create(createIndex, es.Indices.Create.WithBody(strings.NewReader(body)))
 		checkErr("creating index", err)
 		defer res.Body.Close()
 		if res.IsError() {
 			responseBody, _ := io.ReadAll(res.Body)
 			log.Fatal().
-				Str("index", *index).
+				Str("index", createIndex).
 				Int("status_code", res.StatusCode).
 				Str("body", string(responseBody)).
 				Msg("Failed to create index")
 		}
-		waitForIndex(es, *index)
+		waitForIndex(es, createIndex)
 		exists = true
-		log.Info().Str("index", *index).Msg("Index created")
+		if *aliasMode {
+			log.Info().Str("alias", *index).Str("index", createIndex).Msg("Index created for alias")
+		} else {
+			log.Info().Str("index", *index).Msg("Index created")
+		}
 	}
 
-	if *syncManaged && exists {
+	deferPolicyCreationUntilAliasSwap := effectiveSyncManaged && *aliasMode && shouldCreateIndex
+	if effectiveSyncManaged && exists {
 		if !shouldCreateIndex {
 			createPipelines(es, pipelineDefinitions, pipelineNames)
 		}
-		createPolicies(es, policyDefinitions, policyNames)
+		if !deferPolicyCreationUntilAliasSwap {
+			createPolicies(es, policyDefinitions, policyNames)
+		}
 	}
 
 	if action.requiresDataFile() {
@@ -395,15 +509,15 @@ func main() {
 			}
 			batch = append(batch, doc)
 			if len(batch) == *batchSize {
-				result := bulkInsert(es, *index, batch, processed+len(batch), total, *idField)
-				processed += len(batch)
-				succeededTotal += result.Succeeded
-				failedTotal += result.Failed
+					result := bulkInsert(es, writeIndex, batch, processed+len(batch), total, *idField)
+					processed += len(batch)
+					succeededTotal += result.Succeeded
+					failedTotal += result.Failed
 				batch = batch[:0]
 			}
 		}
 		if len(batch) > 0 {
-			result := bulkInsert(es, *index, batch, processed+len(batch), total, *idField)
+			result := bulkInsert(es, writeIndex, batch, processed+len(batch), total, *idField)
 			processed += len(batch)
 			succeededTotal += result.Succeeded
 			failedTotal += result.Failed
@@ -424,11 +538,215 @@ func main() {
 		}
 	}
 
+	if *aliasMode && shouldCreateIndex {
+		updateAlias(es, *index, createdIndex)
+	}
+	if deferPolicyCreationUntilAliasSwap {
+		createPolicies(es, policyDefinitions, policyNames)
+	}
+	if *aliasMode && *keepLast > 0 {
+		pruneTimestampedIndices(es, *index, *keepLast)
+	}
+
 	if enrich.enabled {
-		refreshIndex(es, *index)
+		refreshIndex(es, writeIndex)
 		runEnrichPolicies(es, enrich, policyNames)
 	}
 
+}
+
+func buildTimestampedIndexName(alias string, now time.Time) string {
+	return fmt.Sprintf("%s-%s", alias, now.Format("20060102150405"))
+}
+
+func nextAvailableTimestampedIndexName(es *elasticsearch.Client, alias string, base time.Time) string {
+	name, err := nextAvailableTimestampedIndexNameWithCheck(alias, base, func(candidate string) (bool, error) {
+		return indexExists(es, candidate)
+	})
+	checkErr("finding available timestamped index name", err)
+	return name
+}
+
+func nextAvailableTimestampedIndexNameWithCheck(alias string, base time.Time, existsFn func(candidate string) (bool, error)) (string, error) {
+	candidateTime := base.UTC()
+	for attempt := 0; attempt < 300; attempt++ {
+		candidate := buildTimestampedIndexName(alias, candidateTime)
+		exists, err := existsFn(candidate)
+		if err != nil {
+			return "", err
+		}
+		if !exists {
+			return candidate, nil
+		}
+
+		log.Warn().
+			Str("alias", alias).
+			Str("index", candidate).
+			Msg("Timestamped index name already exists; advancing by one second")
+		candidateTime = candidateTime.Add(time.Second)
+	}
+
+	return "", fmt.Errorf("unable to find an available timestamped index name for alias %q", alias)
+}
+
+func resolveAliasTargets(es *elasticsearch.Client, alias string) []string {
+	res, err := es.Indices.GetAlias(es.Indices.GetAlias.WithName(alias))
+	checkErr("resolving alias targets", err)
+	defer res.Body.Close()
+
+	if res.StatusCode == http.StatusNotFound {
+		return nil
+	}
+	if res.IsError() {
+		body, _ := io.ReadAll(res.Body)
+		log.Fatal().
+			Str("alias", alias).
+			Int("status_code", res.StatusCode).
+			Str("body", string(body)).
+			Msg("Failed to resolve alias targets")
+	}
+
+	var parsed map[string]json.RawMessage
+	if err := json.NewDecoder(res.Body).Decode(&parsed); err != nil {
+		log.Fatal().Err(err).Str("alias", alias).Msg("Unable to parse alias response")
+	}
+
+	targets := make([]string, 0, len(parsed))
+	for index := range parsed {
+		targets = append(targets, index)
+	}
+	slices.Sort(targets)
+	return targets
+}
+
+func updateAlias(es *elasticsearch.Client, alias, index string) {
+	current := resolveAliasTargets(es, alias)
+
+	actions := make([]map[string]map[string]any, 0, len(current)+1)
+	for _, existing := range current {
+		actions = append(actions, map[string]map[string]any{
+			"remove": {
+				"index": existing,
+				"alias": alias,
+			},
+		})
+	}
+	actions = append(actions, map[string]map[string]any{
+		"add": {
+			"index":          index,
+			"alias":          alias,
+			"is_write_index": true,
+		},
+	})
+
+	payload, err := json.Marshal(map[string]any{"actions": actions})
+	checkErr("serializing alias actions", err)
+	res, err := es.Indices.UpdateAliases(strings.NewReader(string(payload)))
+	checkErr("updating alias", err)
+	defer res.Body.Close()
+
+	if res.IsError() {
+		body, _ := io.ReadAll(res.Body)
+		log.Fatal().
+			Str("alias", alias).
+			Str("index", index).
+			Int("status_code", res.StatusCode).
+			Str("body", string(body)).
+			Msg("Failed to update alias")
+	}
+
+	log.Info().Str("alias", alias).Str("index", index).Msg("Alias now points to index")
+}
+
+func deleteIndices(es *elasticsearch.Client, indices []string) {
+	for _, index := range indices {
+		deleteAndCheck(es, index)
+		log.Info().Str("index", index).Msg("Index deleted")
+	}
+}
+
+type timestampedIndex struct {
+	Name      string
+	Timestamp time.Time
+}
+
+func listTimestampedIndices(es *elasticsearch.Client, alias string) []timestampedIndex {
+	pattern := alias + "-*"
+	res, err := es.Indices.Get([]string{pattern})
+	checkErr("listing timestamped indices", err)
+	defer res.Body.Close()
+
+	if res.StatusCode == http.StatusNotFound {
+		return nil
+	}
+	if res.IsError() {
+		body, _ := io.ReadAll(res.Body)
+		log.Fatal().
+			Str("alias", alias).
+			Int("status_code", res.StatusCode).
+			Str("body", string(body)).
+			Msg("Failed to list timestamped indices")
+	}
+
+	var parsed map[string]json.RawMessage
+	if err := json.NewDecoder(res.Body).Decode(&parsed); err != nil {
+		log.Fatal().Err(err).Str("alias", alias).Msg("Unable to parse timestamped index response")
+	}
+
+	result := make([]timestampedIndex, 0, len(parsed))
+	for index := range parsed {
+		timestamp, ok := parseTimestampedIndexName(alias, index)
+		if !ok {
+			continue
+		}
+		result = append(result, timestampedIndex{Name: index, Timestamp: timestamp})
+	}
+	return result
+}
+
+func parseTimestampedIndexName(alias, index string) (time.Time, bool) {
+	prefix := alias + "-"
+	if !strings.HasPrefix(index, prefix) {
+		return time.Time{}, false
+	}
+	suffix := strings.TrimPrefix(index, prefix)
+	if len(suffix) != 14 {
+		return time.Time{}, false
+	}
+	for _, ch := range suffix {
+		if ch < '0' || ch > '9' {
+			return time.Time{}, false
+		}
+	}
+
+	parsed, err := time.Parse("20060102150405", suffix)
+	if err != nil {
+		return time.Time{}, false
+	}
+	return parsed, true
+}
+
+func pruneTimestampedIndices(es *elasticsearch.Client, alias string, keepLast int) {
+	if keepLast <= 0 {
+		return
+	}
+
+	all := listTimestampedIndices(es, alias)
+	if len(all) <= keepLast {
+		return
+	}
+
+	sort.Slice(all, func(i, j int) bool {
+		return all[i].Timestamp.After(all[j].Timestamp)
+	})
+
+	toDelete := make([]string, 0, len(all)-keepLast)
+	for _, entry := range all[keepLast:] {
+		toDelete = append(toDelete, entry.Name)
+	}
+
+	log.Info().Str("alias", alias).Int("keep_last", keepLast).Strs("indices", toDelete).Msg("Pruning old timestamped indices")
+	deleteIndices(es, toDelete)
 }
 
 func checkErr(context string, err error) {

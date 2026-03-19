@@ -109,6 +109,8 @@ or from the command-line.
 | `-url`               | Endpoint URL (e.g., `http://localhost:9200`)                                 |
 | `-insecureSkipVerify`| Skip TLS verification for HTTPS                                              |
 | `-index`             | Target index name (**required**)                                             |
+| `-alias`             | Treat `-index` as an alias and create timestamped indices as `<alias>-YYYYMMDDHHMMSS` when creating a new index |
+| `-keep-last`         | With `-alias`, keep only the newest N timestamped indices matching `<alias>-YYYYMMDDHHMMSS` (default: 0, disabled) |
 | `-settings`          | Optional path to JSON file with index settings                               |
 | `-mappings`          | Optional path to JSON file with index mappings                               |
 | `-pipelines`         | Optional path to JSON file with one or more ingest pipeline definitions      |
@@ -116,7 +118,7 @@ or from the command-line.
 | `-batch`             | Number of documents per bulk insert (default: 1000)                          |
 | `-add`               | Append data to an existing index or create the index first if it does not exist |
 | `-flush`             | Delete all documents from an existing index without deleting the index, then load replacement data |
-| `-delete`            | Delete the index and declared managed resources before recreating the index and loading data |
+| `-delete`            | Recreate data target before loading data: deletes concrete index in normal mode; rolls alias to a new timestamped index in `-alias` mode |
 | `-data`              | Path to JSON array of documents to load (**required with** `-add`, `-flush`, or `-delete`) |
 | `-sync-managed`      | Create or update declared ingest pipelines and enrich policies               |
 | `-nuke`              | Delete the current index and declared managed resources first, including dependent pipelines that reference declared enrich policies |
@@ -134,9 +136,11 @@ or from the command-line.
 |-----------------|----------------------------------------------------------------------------------------------------------------------------|
 | `-add`          | Append data to an existing index, or create the index and load data if it does not exist                                   |
 | `-flush`        | Remove existing documents, keep the existing index structure, then load replacement data                                   |
-| `-delete`       | Remove the current index and declared managed resources, then recreate the index and load data                             |
+| `-delete`       | Recreate data target and reload data: concrete index is deleted/recreated in normal mode; alias mode creates a new timestamped index and repoints alias |
 | `-sync-managed` | Create or update declared pipelines and policies without changing document data by itself                                  |
 | `-nuke`         | Remove the current index and declared managed resources first; if combined with another action, that action runs afterward |
+| `-alias`        | Treat `-index` as an alias and use timestamped concrete index names (`<alias>-YYYYMMDDHHMMSS`) when a new index is created |
+| `-keep-last`    | With `-alias`, prune older timestamped concrete indices after the run and keep only the newest N by parsed timestamp suffix |
 
 Common combinations:
 
@@ -145,6 +149,36 @@ Common combinations:
 - `-delete -sync-managed`: rebuild the index from scratch and recreate declared pipelines and policies
 - `-nuke -delete -sync-managed`: force a full teardown first, then rebuild cleanly
 - `-nuke`: remove the current index and declared managed resources without loading new data
+- `-delete -alias -keep-last 2`: roll to a new timestamped index, repoint alias, then keep only the newest two generations
+
+## Alias Mode
+
+When `-alias` is set, `-index` is interpreted as an Elasticsearch alias name.
+The loader uses Elasticsearch terms in logs:
+
+- `alias`: logical name provided by `-index` (for example `cards`)
+- `index`: concrete index name (for example `cards-20260319130459`)
+
+Concrete index names created by alias mode always use a numeric suffix:
+
+- `<alias>-YYYYMMDDHHMMSS`
+
+Data-action behavior in alias mode:
+
+- `-delete`: create a new timestamped index, load data, then point the alias to the new index (older timestamped indices can be pruned with `-keep-last`)
+- `-flush`: flush documents from current alias target indices, then load replacement data
+- `-add`: append to current alias target index; if the alias has no index yet, create a first timestamped index and load data
+
+`-keep-last` only applies when `-alias` is enabled. It parses and sorts timestamped concrete index names, then deletes older ones so only the newest N remain.
+In alias mode, `-delete` keeps existing managed resources (pipelines/policies) and relies on `-sync-managed` to upsert definitions; use `-nuke` when you want destructive managed-resource cleanup.
+If `-delete -alias` is run without `-sync-managed`, the loader logs a warning and assumes `-sync-managed` for that run. Add `-sync-managed` explicitly in automation for clarity.
+If `-delete -alias` is run without `-keep-last`, the loader logs a warning that no old generations were deleted and storage use can grow over time.
+
+Example progression with `-keep-last 2`:
+
+1. Run 1: keep `cards-20260319130000`
+2. Run 2: keep `cards-20260319130000`, `cards-20260319130500`
+3. Run 3: create `cards-20260319131000`, then prune oldest so remaining are `cards-20260319130500`, `cards-20260319131000`
 
 ## Enrich Policies
 
@@ -189,7 +223,7 @@ Definition file formats are documented in [docs/PIPELINES.md](docs/PIPELINES.md)
 
 When `-pipelines` is supplied during index creation, the loader preserves the JSON key order from the pipeline file. If the settings file does not already define a default pipeline, the first declared pipeline becomes the index default pipeline automatically.
 
-Definition files support variable expansion before they are parsed. `${INDEX}` is populated from the current `-index` value, and other placeholders fall back to environment variables when present.
+Definition files support variable expansion before they are parsed. `${INDEX}` is populated from the current `-index` value (alias name when `-alias` is enabled), and other placeholders fall back to environment variables when present.
 
 ## JSON Formats
 

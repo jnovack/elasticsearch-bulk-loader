@@ -5,6 +5,7 @@ import (
 	"os"
 	"reflect"
 	"testing"
+	"time"
 )
 
 func TestEnrichFlagValueBareFlagRunsAllPolicies(t *testing.T) {
@@ -278,5 +279,103 @@ func TestPipelineDeleteBlockedByDefaultIndex(t *testing.T) {
 
 	if pipelineDeleteBlockedByDefaultIndex([]byte(`{"error":{"reason":"pipeline [enrich-from-slugs] cannot be deleted"}}`)) {
 		t.Fatal("expected unrelated pipeline delete error to be ignored")
+	}
+}
+
+func TestBuildTimestampedIndexName(t *testing.T) {
+	t.Parallel()
+
+	got := buildTimestampedIndexName("cards", time.Date(2026, time.March, 19, 13, 4, 59, 0, time.UTC))
+	if got != "cards-20260319130459" {
+		t.Fatalf("buildTimestampedIndexName mismatch: got %q want %q", got, "cards-20260319130459")
+	}
+}
+
+func TestParseTimestampedIndexName(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		alias  string
+		index  string
+		ok     bool
+		expect string
+	}{
+		{
+			name:   "valid",
+			alias:  "cards",
+			index:  "cards-20260319130459",
+			ok:     true,
+			expect: "2026-03-19T13:04:59Z",
+		},
+		{
+			name:  "wrong alias",
+			alias: "cards",
+			index: "slugs-20260319130459",
+			ok:    false,
+		},
+		{
+			name:  "non numeric suffix",
+			alias: "cards",
+			index: "cards-20260319abc459",
+			ok:    false,
+		},
+		{
+			name:  "wrong width suffix",
+			alias: "cards",
+			index: "cards-2026031913045",
+			ok:    false,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, ok := parseTimestampedIndexName(tt.alias, tt.index)
+			if ok != tt.ok {
+				t.Fatalf("parseTimestampedIndexName ok mismatch: got %t want %t", ok, tt.ok)
+			}
+			if !tt.ok {
+				return
+			}
+			if got.UTC().Format(time.RFC3339) != tt.expect {
+				t.Fatalf("parseTimestampedIndexName value mismatch: got %q want %q", got.UTC().Format(time.RFC3339), tt.expect)
+			}
+		})
+	}
+}
+
+func TestNextAvailableTimestampedIndexNameWithCheck(t *testing.T) {
+	t.Parallel()
+
+	base := time.Date(2026, time.March, 19, 13, 4, 59, 0, time.UTC)
+	collisions := map[string]struct{}{
+		"cards-20260319130459": {},
+		"cards-20260319130500": {},
+	}
+
+	got, err := nextAvailableTimestampedIndexNameWithCheck("cards", base, func(candidate string) (bool, error) {
+		_, exists := collisions[candidate]
+		return exists, nil
+	})
+	if err != nil {
+		t.Fatalf("nextAvailableTimestampedIndexNameWithCheck returned error: %v", err)
+	}
+
+	if got != "cards-20260319130501" {
+		t.Fatalf("nextAvailableTimestampedIndexNameWithCheck mismatch: got %q want %q", got, "cards-20260319130501")
+	}
+}
+
+func TestNextAvailableTimestampedIndexNameWithCheckPropagatesErrors(t *testing.T) {
+	t.Parallel()
+
+	_, err := nextAvailableTimestampedIndexNameWithCheck("cards", time.Date(2026, time.March, 19, 13, 4, 59, 0, time.UTC), func(candidate string) (bool, error) {
+		return false, os.ErrPermission
+	})
+	if err == nil {
+		t.Fatal("expected error, got nil")
 	}
 }

@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -148,6 +149,18 @@ func TestEndToEndScenarios(t *testing.T) {
 			flags:  "-add -enrich=<known>,<missing>",
 			checks: "warns for unknown policy names and still executes the known policy",
 			run:    scenarioEnrichExplicitUnknownPolicy,
+		},
+		{
+			name:   "alias_delete_creates_timestamped_index",
+			flags:  "-delete -alias",
+			checks: "creates timestamped concrete index and points alias to it",
+			run:    scenarioAliasDeleteCreatesTimestampedIndex,
+		},
+		{
+			name:   "alias_keep_last_prunes_oldest_after_third_run",
+			flags:  "run -delete -alias -keep-last=2 three times",
+			checks: "third run prunes the oldest timestamped index and keeps newest two",
+			run:    scenarioAliasKeepLastPrunesOldestAfterThirdRun,
 		},
 	}
 
@@ -323,6 +336,72 @@ func scenarioEnrichExplicitUnknownPolicy(t *testing.T, ctx *scenarioContext) {
 
 	assertDocCount(t, ctx, ctx.sourceIndex, 3)
 	assertEnrichBackingIndexExists(t, ctx, ctx.sourcePolicy)
+}
+
+func scenarioAliasDeleteCreatesTimestampedIndex(t *testing.T, ctx *scenarioContext) {
+	args := append(sourceArgsNoPolicies(ctx, "-delete", false, false, ""), "-alias")
+	result := runLoader(t, ctx, nil, args)
+	mustSucceed(t, result)
+
+	targets := aliasTargets(t, ctx, ctx.sourceIndex)
+	if len(targets) != 1 {
+		t.Fatalf("expected alias %q to have exactly one target, got %v", ctx.sourceIndex, targets)
+	}
+
+	assertTimestampedIndexName(t, ctx.sourceIndex, targets[0])
+	assertIndexExists(t, ctx, targets[0])
+	assertDocCount(t, ctx, ctx.sourceIndex, 2)
+}
+
+func scenarioAliasKeepLastPrunesOldestAfterThirdRun(t *testing.T, ctx *scenarioContext) {
+	baseArgs := []string{
+		"-url", ctx.env.esURL,
+		"-index", ctx.sourceIndex,
+		"-settings", filepath.Join(ctx.sourceBaseDir, "settings.json"),
+		"-mappings", filepath.Join(ctx.sourceBaseDir, "mappings.json"),
+		"-pipelines", filepath.Join(ctx.sourceBaseDir, "pipelines.json"),
+		"-data", filepath.Join(ctx.sourceBaseDir, "data.json"),
+		"-id", "lookup_id",
+		"-delete",
+		"-sync-managed",
+		"-alias",
+		"-keep-last", "2",
+	}
+
+	mustSucceed(t, runLoader(t, ctx, nil, baseArgs))
+	first := singleAliasTarget(t, ctx, ctx.sourceIndex)
+	assertTimestampedIndexName(t, ctx.sourceIndex, first)
+	assertPipelineExists(t, ctx, ctx.sourcePipelinePrimary)
+
+	mustSucceed(t, runLoader(t, ctx, nil, baseArgs))
+	second := singleAliasTarget(t, ctx, ctx.sourceIndex)
+	assertTimestampedIndexName(t, ctx.sourceIndex, second)
+	if second == first {
+		t.Fatalf("expected second run to create a new timestamped index, got same index %q", second)
+	}
+	assertPipelineExists(t, ctx, ctx.sourcePipelinePrimary)
+
+	mustSucceed(t, runLoader(t, ctx, nil, baseArgs))
+	third := singleAliasTarget(t, ctx, ctx.sourceIndex)
+	assertTimestampedIndexName(t, ctx.sourceIndex, third)
+	if third == first || third == second {
+		t.Fatalf("expected third run to create a new timestamped index, got %q", third)
+	}
+	assertPipelineExists(t, ctx, ctx.sourcePipelinePrimary)
+
+	indices := timestampedIndices(t, ctx, ctx.sourceIndex)
+	if len(indices) != 2 {
+		t.Fatalf("expected exactly 2 timestamped indices after pruning, got %d (%v)", len(indices), indices)
+	}
+	if containsString(indices, first) {
+		t.Fatalf("expected oldest index %q to be pruned, remaining=%v", first, indices)
+	}
+	if !containsString(indices, second) || !containsString(indices, third) {
+		t.Fatalf("expected newest indices %q and %q to remain, got %v", second, third, indices)
+	}
+
+	assertEqual(t, singleAliasTarget(t, ctx, ctx.sourceIndex), third)
+	assertDocCount(t, ctx, ctx.sourceIndex, 2)
 }
 
 func setupTestEnv() (*testEnv, error) {
@@ -536,6 +615,8 @@ func (ctx *scenarioContext) cleanup(t *testing.T) {
 
 	deleteIndexIfExists(t, ctx, ctx.targetIndex)
 	deleteIndexIfExists(t, ctx, ctx.sourceIndex)
+	deleteTimestampedIndicesForAlias(t, ctx, ctx.sourceIndex)
+	deleteTimestampedIndicesForAlias(t, ctx, ctx.targetIndex)
 
 	deletePipelineIfExists(t, ctx, ctx.targetPipelinePrimary)
 	deletePipelineIfExists(t, ctx, ctx.targetPipelineSecondary)
@@ -664,6 +745,94 @@ func nukeArgs(ctx *scenarioContext) []string {
 		"-policies", filepath.Join(ctx.sourceBaseDir, "policies.json"),
 		"-nuke",
 	}
+}
+
+func aliasTargets(t *testing.T, ctx *scenarioContext, alias string) []string {
+	t.Helper()
+
+	resp := doRequest(t, ctx, http.MethodGet, "/_alias/"+alias, nil)
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		return nil
+	}
+	if resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("get alias %s failed: status=%d body=%s", alias, resp.StatusCode, string(body))
+	}
+
+	var parsed map[string]json.RawMessage
+	if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
+		t.Fatalf("decode alias response for %s: %v", alias, err)
+	}
+
+	targets := make([]string, 0, len(parsed))
+	for index := range parsed {
+		targets = append(targets, index)
+	}
+	return targets
+}
+
+func singleAliasTarget(t *testing.T, ctx *scenarioContext, alias string) string {
+	t.Helper()
+	targets := aliasTargets(t, ctx, alias)
+	if len(targets) != 1 {
+		t.Fatalf("expected alias %q to have exactly one target, got %v", alias, targets)
+	}
+	return targets[0]
+}
+
+func timestampedIndices(t *testing.T, ctx *scenarioContext, alias string) []string {
+	t.Helper()
+	var response []map[string]any
+	readJSON(t, doRequest(t, ctx, http.MethodGet, "/_cat/indices/"+alias+"-*?format=json&h=index", nil), &response)
+
+	indices := make([]string, 0, len(response))
+	for _, item := range response {
+		indexName, _ := item["index"].(string)
+		if isTimestampedIndexName(alias, indexName) {
+			indices = append(indices, indexName)
+		}
+	}
+	return indices
+}
+
+func deleteTimestampedIndicesForAlias(t *testing.T, ctx *scenarioContext, alias string) {
+	t.Helper()
+	for _, index := range timestampedIndices(t, ctx, alias) {
+		deleteIndexIfExists(t, ctx, index)
+	}
+}
+
+func assertTimestampedIndexName(t *testing.T, alias, index string) {
+	t.Helper()
+	if !isTimestampedIndexName(alias, index) {
+		t.Fatalf("expected index %q to match alias timestamp pattern %s-YYYYMMDDHHMMSS", index, alias)
+	}
+}
+
+func isTimestampedIndexName(alias, index string) bool {
+	prefix := alias + "-"
+	if !strings.HasPrefix(index, prefix) {
+		return false
+	}
+	suffix := strings.TrimPrefix(index, prefix)
+	if len(suffix) != 14 {
+		return false
+	}
+	if _, err := strconv.ParseInt(suffix, 10, 64); err != nil {
+		return false
+	}
+	_, err := time.Parse("20060102150405", suffix)
+	return err == nil
+}
+
+func containsString(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
 }
 
 func assertIndexExists(t *testing.T, ctx *scenarioContext, index string) {
@@ -854,6 +1023,9 @@ func deleteIndexIfExists(t *testing.T, ctx *scenarioContext, index string) {
 	resp := doRequest(t, ctx, http.MethodDelete, "/"+index, nil)
 	body, _ := io.ReadAll(resp.Body)
 	_ = resp.Body.Close()
+	if resp.StatusCode == http.StatusBadRequest && bytes.Contains(body, []byte("matches an alias")) {
+		return
+	}
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("delete index %s failed: status=%d body=%s", index, resp.StatusCode, string(body))
 	}
