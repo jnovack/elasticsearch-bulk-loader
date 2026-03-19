@@ -126,6 +126,7 @@ or from the command-line.
 | `-enrich`            | Run enrich policies after the bulk insert; omit value for all or pass a comma-separated list |
 | `-user` / `-pass`    | Username and password for Basic Auth                                         |
 | `-apiKey`            | Elasticsearch API key                                                        |
+| `-level`             | Log level filter: `trace`, `debug`, `info`, `warn`, or `error` (default: `info`) |
 | `-version`           | Print version and exit                                                       |
 
 ## Behavior Summary

@@ -6,6 +6,8 @@ import (
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/rs/zerolog"
 )
 
 func TestEnrichFlagValueBareFlagRunsAllPolicies(t *testing.T) {
@@ -72,6 +74,45 @@ func TestResolveEnrichTargetsWarnsForMissingPolicies(t *testing.T) {
 	}
 	if want := []string{"policy-missing"}; !reflect.DeepEqual(missing, want) {
 		t.Fatalf("missing mismatch: got %v want %v", missing, want)
+	}
+}
+
+func TestParseLogLevel(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		input    string
+		want     zerolog.Level
+		wantErr  bool
+	}{
+		{name: "trace", input: "trace", want: zerolog.TraceLevel},
+		{name: "debug uppercase", input: "DEBUG", want: zerolog.DebugLevel},
+		{name: "info spaced", input: " info ", want: zerolog.InfoLevel},
+		{name: "warn", input: "warn", want: zerolog.WarnLevel},
+		{name: "error", input: "error", want: zerolog.ErrorLevel},
+		{name: "invalid", input: "verbose", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := parseLogLevel(tt.input)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("parseLogLevel returned error: %v", err)
+			}
+			if got != tt.want {
+				t.Fatalf("parseLogLevel mismatch: got %v want %v", got, tt.want)
+			}
+		})
 	}
 }
 

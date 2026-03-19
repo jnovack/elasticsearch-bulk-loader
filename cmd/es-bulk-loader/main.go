@@ -194,6 +194,7 @@ func main() {
 	user := flag.String("user", "", "Username for basic auth (optional)")
 	pass := flag.String("pass", "", "Password for basic auth (optional)")
 	apiKey := flag.String("apiKey", "", "Elasticsearch API key (optional)")
+	logLevel := flag.String("level", "info", "Log level (trace, debug, info, warn, error)")
 	enrich := &enrichFlagValue{}
 	flag.Var(enrich, "enrich", "Run enrich policies after the bulk insert; provide a comma-separated policy list or omit the value to run all policies")
 	showVersion := flag.Bool("version", false, "print version and exit")
@@ -204,6 +205,13 @@ func main() {
 
 	// Init logger
 	zerolog.TimeFieldFormat = time.RFC3339
+	parsedLogLevel, err := parseLogLevel(*logLevel)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "invalid -level value %q: %v\n", *logLevel, err)
+		flag.Usage()
+		os.Exit(1)
+	}
+	zerolog.SetGlobalLevel(parsedLogLevel)
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 
 	if *showVersion {
@@ -553,6 +561,23 @@ func main() {
 		runEnrichPolicies(es, enrich, policyNames)
 	}
 
+}
+
+func parseLogLevel(level string) (zerolog.Level, error) {
+	switch strings.ToLower(strings.TrimSpace(level)) {
+	case "trace":
+		return zerolog.TraceLevel, nil
+	case "debug":
+		return zerolog.DebugLevel, nil
+	case "info":
+		return zerolog.InfoLevel, nil
+	case "warn":
+		return zerolog.WarnLevel, nil
+	case "error":
+		return zerolog.ErrorLevel, nil
+	default:
+		return zerolog.NoLevel, fmt.Errorf("expected one of trace, debug, info, warn, error")
+	}
 }
 
 func buildTimestampedIndexName(alias string, now time.Time) string {
