@@ -3,7 +3,9 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"crypto/tls"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -18,6 +20,7 @@ import (
 	"time"
 
 	"github.com/elastic/go-elasticsearch/v9"
+	"github.com/elastic/go-elasticsearch/v9/esapi"
 	"github.com/jnovack/flag"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -91,6 +94,14 @@ type enrichExecuteResponse struct {
 		Phase string `json:"phase"`
 	} `json:"status,omitempty"`
 	Task *string `json:"task,omitempty"`
+}
+
+type managedPolicyPlan struct {
+	LogicalNames     []string
+	DesiredNames     []string
+	Definitions      namedDefinitions
+	LogicalToDesired map[string]string
+	DesiredSet       map[string]struct{}
 }
 
 func (e *enrichFlagValue) String() string {
@@ -298,7 +309,18 @@ func main() {
 
 	variables := buildTemplateVariables(*index)
 	pipelineDefinitions, pipelineNames := readNamedDefinitions(*pipelinesFile, "pipeline", variables)
-	policyDefinitions, policyNames := readNamedDefinitions(*policiesFile, "policy", variables)
+	logicalPolicyDefinitions, logicalPolicyNames := readNamedDefinitions(*policiesFile, "policy", variables)
+	policyPlan := buildManagedPolicyPlan(logicalPolicyDefinitions, logicalPolicyNames)
+	policyNameMapping := make(map[string]string, len(policyPlan.LogicalToDesired))
+	for logical, desired := range policyPlan.LogicalToDesired {
+		policyNameMapping[logical] = desired
+	}
+	resolvePipelinePolicyFallbacks(es, pipelineDefinitions, pipelineNames, policyNameMapping)
+	pipelineDefinitions = rewritePipelinePolicyReferences(pipelineDefinitions, pipelineNames, policyNameMapping)
+	policyDefinitions := policyPlan.Definitions
+	policyNames := policyPlan.DesiredNames
+	policyDeleteNames := resolveManagedPolicyDeleteNames(es, policyPlan.LogicalNames)
+	enrichSelection := remapEnrichSelection(enrich, policyNameMapping)
 	defaultPipeline := ""
 	if effectiveSyncManaged && len(pipelineNames) > 0 {
 		defaultPipeline = pipelineNames[0]
@@ -358,7 +380,7 @@ func main() {
 			}
 		}
 
-		deleteManagedResources(es, pipelineNames, policyNames, true)
+		deleteManagedResources(es, pipelineNames, policyDeleteNames, true)
 	}
 
 	switch action {
@@ -383,7 +405,7 @@ func main() {
 		if *aliasMode {
 			log.Info().Str("alias", *index).Msg("Alias mode delete keeps existing managed resources; use -nuke for destructive managed-resource cleanup")
 		} else {
-			deleteManagedResources(es, pipelineNames, policyNames, false)
+			deleteManagedResources(es, pipelineNames, policyDeleteNames, false)
 		}
 	case dataActionFlush:
 		if *aliasMode {
@@ -470,6 +492,7 @@ func main() {
 		}
 		if !deferPolicyCreationUntilAliasSwap {
 			createPolicies(es, policyDefinitions, policyNames)
+			garbageCollectManagedPolicies(es, policyPlan.LogicalNames, policyPlan.DesiredSet)
 		}
 	}
 
@@ -517,10 +540,10 @@ func main() {
 			}
 			batch = append(batch, doc)
 			if len(batch) == *batchSize {
-					result := bulkInsert(es, writeIndex, batch, processed+len(batch), total, *idField)
-					processed += len(batch)
-					succeededTotal += result.Succeeded
-					failedTotal += result.Failed
+				result := bulkInsert(es, writeIndex, batch, processed+len(batch), total, *idField)
+				processed += len(batch)
+				succeededTotal += result.Succeeded
+				failedTotal += result.Failed
 				batch = batch[:0]
 			}
 		}
@@ -551,6 +574,7 @@ func main() {
 	}
 	if deferPolicyCreationUntilAliasSwap {
 		createPolicies(es, policyDefinitions, policyNames)
+		garbageCollectManagedPolicies(es, policyPlan.LogicalNames, policyPlan.DesiredSet)
 	}
 	if *aliasMode && *keepLast > 0 {
 		pruneTimestampedIndices(es, *index, *keepLast)
@@ -558,7 +582,7 @@ func main() {
 
 	if enrich.enabled {
 		refreshIndex(es, writeIndex)
-		runEnrichPolicies(es, enrich, policyNames)
+		runEnrichPolicies(es, enrichSelection, policyNames)
 	}
 
 }
@@ -1006,6 +1030,351 @@ func readNamedDefinitions(path, resourceType string, variables templateVariables
 	return definitions, names
 }
 
+func buildManagedPolicyPlan(definitions namedDefinitions, logicalNames []string) managedPolicyPlan {
+	plan := managedPolicyPlan{
+		LogicalNames:     append([]string(nil), logicalNames...),
+		DesiredNames:     make([]string, 0, len(logicalNames)),
+		Definitions:      make(namedDefinitions, len(logicalNames)),
+		LogicalToDesired: make(map[string]string, len(logicalNames)),
+		DesiredSet:       make(map[string]struct{}, len(logicalNames)),
+	}
+	for _, logicalName := range logicalNames {
+		definition, ok := definitions[logicalName]
+		if !ok {
+			log.Fatal().Str("policy", logicalName).Msg("Policy definition missing from parsed policy file")
+		}
+
+		desiredName := managedPolicyName(logicalName, definition)
+		plan.DesiredNames = append(plan.DesiredNames, desiredName)
+		plan.Definitions[desiredName] = definition
+		plan.LogicalToDesired[logicalName] = desiredName
+		plan.DesiredSet[desiredName] = struct{}{}
+
+		log.Debug().
+			Str("logical_policy", logicalName).
+			Str("policy", desiredName).
+			Msg("Resolved managed policy name from policy definition hash")
+	}
+	return plan
+}
+
+func managedPolicyName(logicalName string, definition json.RawMessage) string {
+	canonical, err := canonicalizeRawJSON(definition)
+	if err != nil {
+		log.Fatal().Err(err).Str("policy", logicalName).Msg("Failed to canonicalize policy definition for hashing")
+	}
+
+	sum := sha256.Sum256(canonical)
+	suffix := hex.EncodeToString(sum[:])[:6]
+	return logicalName + "-" + suffix
+}
+
+func canonicalizeRawJSON(raw json.RawMessage) ([]byte, error) {
+	var parsed any
+	if err := json.Unmarshal(raw, &parsed); err != nil {
+		return nil, err
+	}
+	return json.Marshal(parsed)
+}
+
+func rewritePipelinePolicyReferences(definitions namedDefinitions, names []string, logicalToDesired map[string]string) namedDefinitions {
+	if len(definitions) == 0 || len(logicalToDesired) == 0 {
+		return definitions
+	}
+
+	rewritten := make(namedDefinitions, len(definitions))
+	for _, name := range names {
+		definition := definitions[name]
+		var parsed any
+		if err := json.Unmarshal(definition, &parsed); err != nil {
+			log.Fatal().Err(err).Str("pipeline", name).Msg("Unable to parse pipeline definition for policy rewrite")
+		}
+
+		replacements := rewriteEnrichPolicyNameReferences(parsed, logicalToDesired)
+		encoded, err := json.Marshal(parsed)
+		if err != nil {
+			log.Fatal().Err(err).Str("pipeline", name).Msg("Unable to serialize rewritten pipeline definition")
+		}
+		rewritten[name] = encoded
+
+		if replacements > 0 {
+			log.Info().
+				Str("pipeline", name).
+				Int("replacements", replacements).
+				Msg("Rewrote enrich policy references in pipeline to managed policy names")
+		} else {
+			log.Trace().Str("pipeline", name).Msg("No enrich policy reference rewrites needed for pipeline")
+		}
+	}
+
+	// Preserve any map entries not present in the ordered names list.
+	for name, definition := range definitions {
+		if _, ok := rewritten[name]; ok {
+			continue
+		}
+		rewritten[name] = definition
+	}
+	return rewritten
+}
+
+func resolvePipelinePolicyFallbacks(es *elasticsearch.Client, definitions namedDefinitions, names []string, policyNameMapping map[string]string) {
+	referenced := collectReferencedPolicyNamesFromPipelines(definitions, names)
+	if len(referenced) == 0 {
+		return
+	}
+
+	available, supported := getEnrichPolicies(es)
+	if !supported {
+		return
+	}
+	availableSet := make(map[string]struct{}, len(available))
+	for _, name := range available {
+		availableSet[name] = struct{}{}
+	}
+
+	for _, policy := range referenced {
+		if _, mapped := policyNameMapping[policy]; mapped {
+			continue
+		}
+		if _, exact := availableSet[policy]; exact {
+			policyNameMapping[policy] = policy
+			log.Debug().Str("policy", policy).Msg("Using existing exact enrich policy reference from pipeline definition")
+			continue
+		}
+
+		matches := make([]string, 0)
+		for _, candidate := range available {
+			if managedPolicyNameMatchesLogical(policy, candidate) {
+				matches = append(matches, candidate)
+			}
+		}
+		if len(matches) == 0 {
+			log.Warn().Str("logical_policy", policy).Msg("Pipeline references enrich policy that does not exist as exact or managed policy name")
+			continue
+		}
+
+		slices.Sort(matches)
+		chosen := matches[len(matches)-1]
+		policyNameMapping[policy] = chosen
+		if len(matches) > 1 {
+			log.Warn().
+				Str("logical_policy", policy).
+				Str("policy", chosen).
+				Strs("candidates", matches).
+				Msg("Multiple managed enrich policy names matched logical policy reference; using the lexicographically latest match")
+		} else {
+			log.Info().Str("logical_policy", policy).Str("policy", chosen).Msg("Resolved logical enrich policy reference to managed policy name")
+		}
+	}
+}
+
+func rewriteEnrichPolicyNameReferences(value any, logicalToDesired map[string]string) int {
+	replacements := 0
+	switch typed := value.(type) {
+	case map[string]any:
+		if enrich, ok := typed["enrich"].(map[string]any); ok {
+			if policyName, ok := enrich["policy_name"].(string); ok {
+				if desired, mapped := logicalToDesired[policyName]; mapped && desired != policyName {
+					enrich["policy_name"] = desired
+					replacements++
+				}
+			}
+		}
+		for _, nested := range typed {
+			replacements += rewriteEnrichPolicyNameReferences(nested, logicalToDesired)
+		}
+	case []any:
+		for _, nested := range typed {
+			replacements += rewriteEnrichPolicyNameReferences(nested, logicalToDesired)
+		}
+	}
+	return replacements
+}
+
+func collectReferencedPolicyNamesFromPipelines(definitions namedDefinitions, names []string) []string {
+	seen := make(map[string]struct{})
+	for _, name := range names {
+		var parsed any
+		if err := json.Unmarshal(definitions[name], &parsed); err != nil {
+			log.Fatal().Err(err).Str("pipeline", name).Msg("Unable to parse pipeline definition while collecting policy references")
+		}
+		collectPolicyNamesInValue(parsed, seen)
+	}
+
+	referenced := make([]string, 0, len(seen))
+	for policy := range seen {
+		referenced = append(referenced, policy)
+	}
+	slices.Sort(referenced)
+	return referenced
+}
+
+func collectPolicyNamesInValue(value any, seen map[string]struct{}) {
+	switch typed := value.(type) {
+	case map[string]any:
+		if enrich, ok := typed["enrich"].(map[string]any); ok {
+			if policyName, ok := enrich["policy_name"].(string); ok && policyName != "" {
+				seen[policyName] = struct{}{}
+			}
+		}
+		for _, nested := range typed {
+			collectPolicyNamesInValue(nested, seen)
+		}
+	case []any:
+		for _, nested := range typed {
+			collectPolicyNamesInValue(nested, seen)
+		}
+	}
+}
+
+func resolveManagedPolicyDeleteNames(es *elasticsearch.Client, logicalNames []string) []string {
+	if len(logicalNames) == 0 {
+		return nil
+	}
+
+	available, supported := getEnrichPolicies(es)
+	if !supported {
+		return nil
+	}
+
+	deleteSet := make(map[string]struct{})
+	for _, name := range available {
+		for _, logical := range logicalNames {
+			if name == logical || managedPolicyNameMatchesLogical(logical, name) {
+				deleteSet[name] = struct{}{}
+				break
+			}
+		}
+	}
+
+	deleteNames := make([]string, 0, len(deleteSet))
+	for name := range deleteSet {
+		deleteNames = append(deleteNames, name)
+	}
+	slices.Sort(deleteNames)
+	return deleteNames
+}
+
+func managedPolicyNameMatchesLogical(logicalName, policyName string) bool {
+	prefix := logicalName + "-"
+	if !strings.HasPrefix(policyName, prefix) {
+		return false
+	}
+
+	suffix := strings.TrimPrefix(policyName, prefix)
+	if len(suffix) != 6 {
+		return false
+	}
+	for _, ch := range suffix {
+		if (ch < '0' || ch > '9') && (ch < 'a' || ch > 'f') {
+			return false
+		}
+	}
+	return true
+}
+
+func remapEnrichSelection(enrich *enrichFlagValue, logicalToDesired map[string]string) *enrichFlagValue {
+	if enrich == nil || !enrich.enabled || enrich.all || len(logicalToDesired) == 0 {
+		return enrich
+	}
+
+	explicit := enrich.explicitPolicies()
+	if len(explicit) == 0 {
+		return enrich
+	}
+
+	remapped := make([]string, 0, len(explicit))
+	changed := false
+	for _, policy := range explicit {
+		if desired, ok := logicalToDesired[policy]; ok {
+			remapped = append(remapped, desired)
+			changed = true
+			continue
+		}
+		remapped = append(remapped, policy)
+	}
+	if !changed {
+		return enrich
+	}
+
+	cloned := *enrich
+	cloned.raw = strings.Join(remapped, ",")
+	cloned.all = false
+	cloned.enabled = true
+	log.Debug().Str("requested", enrich.raw).Str("resolved", cloned.raw).Msg("Mapped explicit enrich policy names to managed policy names")
+	return &cloned
+}
+
+func garbageCollectManagedPolicies(es *elasticsearch.Client, logicalNames []string, desiredSet map[string]struct{}) {
+	if len(logicalNames) == 0 {
+		return
+	}
+
+	available, supported := getEnrichPolicies(es)
+	if !supported {
+		return
+	}
+
+	for _, policy := range available {
+		if _, keep := desiredSet[policy]; keep {
+			continue
+		}
+
+		managed := false
+		for _, logical := range logicalNames {
+			if managedPolicyNameMatchesLogical(logical, policy) {
+				managed = true
+				break
+			}
+		}
+		if !managed {
+			continue
+		}
+
+		referencing := findPipelinesReferencingPolicy(es, policy)
+		if len(referencing) > 0 {
+			log.Debug().
+				Str("policy", policy).
+				Strs("pipelines", referencing).
+				Msg("Skipping managed policy GC because policy is still referenced by pipelines")
+			continue
+		}
+
+		deletePolicyBestEffort(es, policy)
+	}
+}
+
+func deletePolicyBestEffort(es *elasticsearch.Client, policy string) {
+	res, err := es.EnrichDeletePolicy(
+		policy,
+		es.EnrichDeletePolicy.WithContext(context.Background()),
+		es.EnrichDeletePolicy.WithHeader(map[string]string{
+			"Accept": "application/json",
+		}),
+	)
+	if err != nil {
+		log.Warn().Err(err).Str("policy", policy).Msg("Managed policy GC failed while deleting policy")
+		return
+	}
+	defer res.Body.Close()
+
+	body, _ := io.ReadAll(res.Body)
+	if res.StatusCode == http.StatusNotFound {
+		log.Trace().Str("policy", policy).Msg("Managed policy GC found policy already deleted")
+		return
+	}
+	if res.IsError() {
+		log.Warn().
+			Str("policy", policy).
+			Int("status_code", res.StatusCode).
+			Str("body", string(body)).
+			Msg("Managed policy GC could not delete policy")
+		return
+	}
+
+	log.Info().Str("policy", policy).Msg("Managed policy GC deleted unreferenced policy")
+}
+
 func buildTemplateVariables(index string) templateVariables {
 	return templateVariables{
 		"INDEX": index,
@@ -1092,55 +1461,61 @@ func deletePipelines(es *elasticsearch.Client, names []string) {
 func createPolicies(es *elasticsearch.Client, definitions namedDefinitions, names []string) {
 	for _, name := range names {
 		for attempt := 1; attempt <= 5; attempt++ {
-			res, err := es.EnrichPutPolicy(
-				name,
-				strings.NewReader(string(definitions[name])),
-				es.EnrichPutPolicy.WithContext(context.Background()),
-				es.EnrichPutPolicy.WithHeader(map[string]string{
-					"Content-Type": "application/json",
-					"Accept":       "application/json",
-				}),
-			)
+			res, err := putPolicy(es, name, definitions[name])
 			checkErr("creating enrich policy", err)
 
-			if res.IsError() {
-				body, _ := io.ReadAll(res.Body)
+			if !res.IsError() {
 				res.Body.Close()
-				if isUnsupportedEnrichAPI(res.StatusCode, body) {
-					log.Warn().
-						Int("status_code", res.StatusCode).
-						Str("body", string(body)).
-						Msg("Enrich policy endpoint returned a generic 404; check proxy or routing for /_enrich/policy and confirm this URL matches the backend used by Dev Tools")
-					return
-				}
-				if hasElasticsearchErrorType(body, "index_not_found_exception") && attempt < 5 {
-					log.Warn().
-						Str("policy", name).
-						Int("attempt", attempt).
-						Int("status_code", res.StatusCode).
-						Str("body", string(body)).
-						Msg("Source index for enrich policy is not visible yet; retrying enrich policy creation")
-					time.Sleep(500 * time.Millisecond)
-					continue
-				}
-				if hasElasticsearchErrorType(body, "resource_already_exists_exception") {
-					log.Info().
-						Str("policy", name).
-						Msg("Enrich policy already exists. Leaving it in place")
-					break
-				}
-				log.Fatal().
-					Str("policy", name).
-					Int("status_code", res.StatusCode).
-					Str("body", string(body)).
-					Msg("Failed to create enrich policy")
+				log.Info().Str("policy", name).Msg("Created enrich policy")
+				break
 			}
+
+			body, _ := io.ReadAll(res.Body)
 			res.Body.Close()
 
-			log.Info().Str("policy", name).Msg("Created enrich policy")
-			break
+			if isUnsupportedEnrichAPI(res.StatusCode, body) {
+				log.Warn().
+					Int("status_code", res.StatusCode).
+					Str("body", string(body)).
+					Msg("Enrich policy endpoint returned a generic 404; check proxy or routing for /_enrich/policy and confirm this URL matches the backend used by Dev Tools")
+				return
+			}
+			if hasElasticsearchErrorType(body, "index_not_found_exception") && attempt < 5 {
+				log.Warn().
+					Str("policy", name).
+					Int("attempt", attempt).
+					Int("status_code", res.StatusCode).
+					Str("body", string(body)).
+					Msg("Source index for enrich policy is not visible yet; retrying enrich policy creation")
+				time.Sleep(500 * time.Millisecond)
+				continue
+			}
+			if hasElasticsearchErrorType(body, "resource_already_exists_exception") {
+				log.Info().
+					Str("policy", name).
+					Msg("Managed enrich policy already exists for this definition hash")
+				break
+			}
+
+			log.Fatal().
+				Str("policy", name).
+				Int("status_code", res.StatusCode).
+				Str("body", string(body)).
+				Msg("Failed to create enrich policy")
 		}
 	}
+}
+
+func putPolicy(es *elasticsearch.Client, name string, definition json.RawMessage) (*esapi.Response, error) {
+	return es.EnrichPutPolicy(
+		name,
+		strings.NewReader(string(definition)),
+		es.EnrichPutPolicy.WithContext(context.Background()),
+		es.EnrichPutPolicy.WithHeader(map[string]string{
+			"Content-Type": "application/json",
+			"Accept":       "application/json",
+		}),
+	)
 }
 
 func deletePolicies(es *elasticsearch.Client, names []string, nuke bool) {

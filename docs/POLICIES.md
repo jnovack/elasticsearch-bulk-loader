@@ -5,7 +5,7 @@ This repository supports organizing multiple policy definitions for a single ind
 
 ## File Shape
 
-Use a top-level JSON object where each key is the policy name and each value is the exact Elasticsearch enrich policy body for that policy.
+Use a top-level JSON object where each key is the logical policy name and each value is the exact Elasticsearch enrich policy body for that policy.
 
 ```json
 {
@@ -33,7 +33,13 @@ Use a top-level JSON object where each key is the policy name and each value is 
 
 ## How It Is Used
 
-The loader reads the file and issues one `PUT /_enrich/policy/<name>` request per entry when `-sync-managed` is set.
+The loader reads the file and reconciles one policy at a time when `-sync-managed` is set:
+
+- The logical policy key is resolved to a managed Elasticsearch policy name using content hash: `<logical>-<sha256[:6]>`.
+- If the resolved managed policy does not exist, it is created.
+- Pipelines are rewritten to reference resolved managed policy names.
+- Older managed policy versions for the same logical key are deleted when they are unreferenced by any pipeline.
+- If a policy key is already in managed name form and collides with existing data, the loader fails loudly.
 
 The E2E fixture keeps source-index enrich policies in:
 
@@ -45,10 +51,10 @@ The loader, not the shell fixtures, is the primary path under test.
 
 Creating an enrich policy is not the same as executing it.
 
-- `-sync-managed` creates the declared policy definitions.
+- `-sync-managed` resolves logical policy names to managed policy names and reconciles those policies.
 - `-enrich` executes enrich policies after the bulk load completes.
 - Before execution, the loader refreshes the source index so the enrich backing index is built from visible documents.
-- If `-enrich` is passed with no explicit value and `-policies` is also supplied, the loader executes the policies declared for that run.
+- If `-enrich` is passed with no explicit value and `-policies` is also supplied, the loader executes the resolved managed policy names declared for that run.
 - If `-enrich` is passed without `-policies`, the loader falls back to the enrich policies currently available in the cluster.
 - Unknown policy names are warned and skipped.
 - If the cluster does not expose enrich APIs, the loader warns and skips enrich create/delete/execute operations instead of aborting the whole run.
@@ -79,4 +85,5 @@ Example:
 - Consolidation is local-file organization only. Elasticsearch still requires one API call per policy.
 - Policy bodies must match the Elasticsearch enrich policy request format.
 - `${INDEX}` is expanded by `es-bulk-loader` to the current `-index` value before the policy file is parsed.
+- Managed policy names use the first 6 hex characters of the SHA-256 hash of canonicalized policy JSON.
 - A created policy still needs to be executed before its enrich backing index exists.

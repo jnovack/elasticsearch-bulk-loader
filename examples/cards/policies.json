@@ -1,0 +1,11 @@
+{
+  "cards-by-id": {
+    "match": {
+      "indices": "${INDEX}",
+      "match_field": "id",
+      "enrich_fields": [
+        "enrich_card"
+      ]
+    }
+  }
+}

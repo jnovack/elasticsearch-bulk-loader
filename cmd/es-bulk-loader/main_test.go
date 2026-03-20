@@ -81,10 +81,10 @@ func TestParseLogLevel(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name     string
-		input    string
-		want     zerolog.Level
-		wantErr  bool
+		name    string
+		input   string
+		want    zerolog.Level
+		wantErr bool
 	}{
 		{name: "trace", input: "trace", want: zerolog.TraceLevel},
 		{name: "debug uppercase", input: "DEBUG", want: zerolog.DebugLevel},
@@ -418,5 +418,68 @@ func TestNextAvailableTimestampedIndexNameWithCheckPropagatesErrors(t *testing.T
 	})
 	if err == nil {
 		t.Fatal("expected error, got nil")
+	}
+}
+
+func TestManagedPolicyNameIsStableAndShortHashed(t *testing.T) {
+	t.Parallel()
+
+	definition := json.RawMessage(`{"match":{"indices":"cards","match_field":"lookup_id","enrich_fields":["name"]}}`)
+	got := managedPolicyName("cards-by-id", definition)
+	if !managedPolicyNameMatchesLogical("cards-by-id", got) {
+		t.Fatalf("expected managed policy name format logical-<6hex>, got %q", got)
+	}
+	if len(got) != len("cards-by-id-")+6 {
+		t.Fatalf("managed policy name length mismatch: got %d", len(got))
+	}
+}
+
+func TestRewritePipelinePolicyReferences(t *testing.T) {
+	t.Parallel()
+
+	definitions := namedDefinitions{
+		"pipeline-a": json.RawMessage(`{
+			"processors": [
+				{"enrich": {"policy_name": "cards-by-id", "field": "lookup_id", "target_field": "source"}}
+			]
+		}`),
+	}
+	rewritten := rewritePipelinePolicyReferences(definitions, []string{"pipeline-a"}, map[string]string{
+		"cards-by-id": "cards-by-id-a1b2c3",
+	})
+
+	var parsed map[string]any
+	if err := json.Unmarshal(rewritten["pipeline-a"], &parsed); err != nil {
+		t.Fatalf("Unmarshal returned error: %v", err)
+	}
+	processors, ok := parsed["processors"].([]any)
+	if !ok || len(processors) == 0 {
+		t.Fatalf("expected processors array in rewritten pipeline")
+	}
+	firstProcessor, ok := processors[0].(map[string]any)
+	if !ok {
+		t.Fatalf("expected first processor object")
+	}
+	enrich, ok := firstProcessor["enrich"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected enrich processor object")
+	}
+	if got := enrich["policy_name"]; got != "cards-by-id-a1b2c3" {
+		t.Fatalf("policy_name mismatch: got %v want %v", got, "cards-by-id-a1b2c3")
+	}
+}
+
+func TestRemapEnrichSelectionMapsLogicalNames(t *testing.T) {
+	t.Parallel()
+
+	enrich := &enrichFlagValue{enabled: true, raw: "cards-by-id,missing"}
+	remapped := remapEnrichSelection(enrich, map[string]string{
+		"cards-by-id": "cards-by-id-a1b2c3",
+	})
+	if remapped == nil {
+		t.Fatal("expected remapped enrich selection")
+	}
+	if got := remapped.raw; got != "cards-by-id-a1b2c3,missing" {
+		t.Fatalf("remapped raw mismatch: got %q", got)
 	}
 }

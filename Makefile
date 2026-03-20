@@ -70,6 +70,7 @@ load-all:
 		-settings ./examples/cards/settings.json \
 		-mappings ./examples/cards/mappings.json \
 		-pipelines ./examples/cards/pipelines.json \
+		-policies ./examples/slugs/policies.json \
 		-data ./examples/cards/cards.json \
 		-sync-managed \
 		-flush
@@ -156,8 +157,6 @@ test-keeplast: es-reset
 		-delete \
 		-alias \
 		-keep-last 2
-
-
 
 example:
 	docker run --rm \

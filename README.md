@@ -188,6 +188,10 @@ Use `-enrich` after a bulk load when enrich policy backing indices need to be re
 When `-pipelines` and `-policies` are supplied, the loader imports those definitions as part of the run:
 
 - `-sync-managed` creates pipelines and attempts to create declared enrich policies, refreshing when necessary.
+- Declared enrich policies are managed by content hash during `-sync-managed`: each logical policy key is resolved to `<logical>-<sha256[:6]>`.
+- If a policy definition is unchanged, the same managed policy name is reused.
+- If a policy definition changes, a new managed policy name is created and pipelines are rewritten to reference it.
+- Old managed policy versions are garbage-collected when they are unreferenced by any pipeline.
 - `-delete` fails loudly if a declared enrich policy is still referenced by another ingest pipeline. This is the safe default because those references may belong to another index workflow.
 - `-nuke` keeps deleting through that conflict by finding and deleting ingest pipelines that reference the declared enrich policy. If one of those pipelines is still configured as `index.default_pipeline` on another index, the loader clears that setting on the dependent index before retrying the pipeline delete.
 - `-add` and `-flush` affect documents only. They do not modify pipelines or policies unless `-sync-managed` is also set.
@@ -204,7 +208,7 @@ go run cmd/es-bulk-loader/main.go \
   -enrich
 ```
 
-When `-enrich` is provided without an explicit policy list and `-policies` is also provided, the loader executes the policies declared for that run. If no policy file is provided, it falls back to all enrich policies currently available in the cluster.
+When `-enrich` is provided without an explicit policy list and `-policies` is also provided, the loader executes the resolved managed policy names declared for that run. If no policy file is provided, it falls back to all enrich policies currently available in the cluster.
 
 Run only specific policies:
 
@@ -217,7 +221,7 @@ go run cmd/es-bulk-loader/main.go \
   -enrich=policy-a,policy-b
 ```
 
-Unknown policy names are logged as warnings and skipped.
+Unknown policy names are logged as warnings and skipped. When a policy file is provided, explicit logical policy names are mapped to the resolved managed policy names automatically.
 If the cluster does not expose the enrich APIs at all, the loader logs a warning and skips enrich policy create/delete/execute operations instead of aborting the whole load.
 
 Definition file formats are documented in [docs/PIPELINES.md](docs/PIPELINES.md) and [docs/POLICIES.md](docs/POLICIES.md).

@@ -370,6 +370,10 @@
       "security_stamp": {
         "type": "keyword"
       },
+      "enrich_card": {
+        "type": "object",
+        "enabled": false
+      },
       "slugs": {
         "properties": {
           "inclusion": {
@@ -378,7 +382,7 @@
           "inclusion_percent": {
             "type": "float"
           },
-          "sanitized": {
+          "name": {
             "type": "keyword"
           },
           "potential_decks": {

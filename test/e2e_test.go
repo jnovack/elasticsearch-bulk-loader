@@ -4,6 +4,8 @@ package e2e
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -38,6 +40,7 @@ type scenarioContext struct {
 	sourcePipelinePrimary   string
 	sourcePipelineSecondary string
 	sourcePolicy            string
+	sourcePolicyManaged     string
 
 	altSourcePipelinePrimary   string
 	altSourcePipelineSecondary string
@@ -552,6 +555,7 @@ func newScenarioContext(t *testing.T, prefix string) *scenarioContext {
 		sourceAppendDir:    filepath.Join(root, "source-append"),
 		targetReferenceDir: filepath.Join(root, "target-reference"),
 	}
+	ctx.sourcePolicyManaged = managedPolicyNameForLogicalAndIndex(ctx.sourcePolicy, ctx.sourceIndex)
 
 	ctx.writeFixtures(t)
 	return ctx
@@ -625,6 +629,8 @@ func (ctx *scenarioContext) cleanup(t *testing.T) {
 	deletePipelineIfExists(t, ctx, ctx.altSourcePipelinePrimary)
 	deletePipelineIfExists(t, ctx, ctx.altSourcePipelineSecondary)
 
+	deleteManagedPoliciesForLogical(t, ctx, ctx.altSourcePolicy)
+	deleteManagedPoliciesForLogical(t, ctx, ctx.sourcePolicy)
 	deletePolicyIfExists(t, ctx, ctx.altSourcePolicy)
 	deletePolicyIfExists(t, ctx, ctx.sourcePolicy)
 }
@@ -656,7 +662,7 @@ func runLoader(t *testing.T, ctx *scenarioContext, extraEnv map[string]string, a
 		"ALT_SOURCE_POLICY="+ctx.altSourcePolicy,
 		"TARGET_PIPELINE_PRIMARY="+ctx.targetPipelinePrimary,
 		"TARGET_PIPELINE_SECONDARY="+ctx.targetPipelineSecondary,
-		"SOURCE_POLICY_NAME="+ctx.sourcePolicy,
+		"SOURCE_POLICY_NAME="+ctx.sourcePolicyManaged,
 	)
 	for key, value := range extraEnv {
 		env = append(env, key+"="+value)
@@ -943,6 +949,13 @@ func assertPipelineMissing(t *testing.T, ctx *scenarioContext, name string) {
 
 func assertPolicyExists(t *testing.T, ctx *scenarioContext, name string) {
 	t.Helper()
+
+	for _, policy := range listPolicyNames(t, ctx) {
+		if policy == name || isManagedPolicyForLogical(name, policy) {
+			return
+		}
+	}
+
 	resp := doRequest(t, ctx, http.MethodGet, "/_enrich/policy/"+name, nil)
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
@@ -953,6 +966,12 @@ func assertPolicyExists(t *testing.T, ctx *scenarioContext, name string) {
 
 func assertPolicyMissing(t *testing.T, ctx *scenarioContext, name string) {
 	t.Helper()
+	for _, policy := range listPolicyNames(t, ctx) {
+		if policy == name || isManagedPolicyForLogical(name, policy) {
+			t.Fatalf("expected policy %q to be missing, found %q", name, policy)
+		}
+	}
+
 	resp := doRequest(t, ctx, http.MethodGet, "/_enrich/policy/"+name, nil)
 	body, err := io.ReadAll(resp.Body)
 	_ = resp.Body.Close()
@@ -966,6 +985,58 @@ func assertPolicyMissing(t *testing.T, ctx *scenarioContext, name string) {
 		return
 	}
 	t.Fatalf("expected policy %q to be missing, status=%d body=%s", name, resp.StatusCode, string(body))
+}
+
+func listPolicyNames(t *testing.T, ctx *scenarioContext) []string {
+	t.Helper()
+	resp := doRequest(t, ctx, http.MethodGet, "/_enrich/policy", nil)
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		return nil
+	}
+	if resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("list policies failed: status=%d body=%s", resp.StatusCode, string(body))
+	}
+
+	var parsed struct {
+		Policies []struct {
+			Config map[string]struct {
+				Name string `json:"name"`
+			} `json:"config"`
+		} `json:"policies"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
+		t.Fatalf("decode policies response: %v", err)
+	}
+
+	names := make([]string, 0)
+	for _, policy := range parsed.Policies {
+		for _, config := range policy.Config {
+			if config.Name == "" {
+				continue
+			}
+			names = append(names, config.Name)
+		}
+	}
+	return names
+}
+
+func isManagedPolicyForLogical(logical, candidate string) bool {
+	prefix := logical + "-"
+	if !strings.HasPrefix(candidate, prefix) {
+		return false
+	}
+	suffix := strings.TrimPrefix(candidate, prefix)
+	if len(suffix) != 6 {
+		return false
+	}
+	for _, ch := range suffix {
+		if (ch < '0' || ch > '9') && (ch < 'a' || ch > 'f') {
+			return false
+		}
+	}
+	return true
 }
 
 func assertEnrichBackingIndexExists(t *testing.T, ctx *scenarioContext, policy string) {
@@ -1054,6 +1125,15 @@ func deletePolicyIfExists(t *testing.T, ctx *scenarioContext, name string) {
 	}
 }
 
+func deleteManagedPoliciesForLogical(t *testing.T, ctx *scenarioContext, logical string) {
+	t.Helper()
+	for _, policy := range listPolicyNames(t, ctx) {
+		if policy == logical || isManagedPolicyForLogical(logical, policy) {
+			deletePolicyIfExists(t, ctx, policy)
+		}
+	}
+}
+
 func readJSON(t *testing.T, resp *http.Response, target any) {
 	t.Helper()
 	defer resp.Body.Close()
@@ -1134,6 +1214,22 @@ func nestedValue(value map[string]any, path ...string) any {
 		}
 	}
 	return current
+}
+
+func managedPolicyNameForLogicalAndIndex(logical, index string) string {
+	raw := map[string]any{
+		"match": map[string]any{
+			"indices":       index,
+			"match_field":   "lookup_id",
+			"enrich_fields": []string{"calculated_value", "source_name", "source_label"},
+		},
+	}
+	canonical, err := json.Marshal(raw)
+	if err != nil {
+		panic(fmt.Sprintf("marshal managed policy canonical form: %v", err))
+	}
+	sum := sha256.Sum256(canonical)
+	return logical + "-" + hex.EncodeToString(sum[:])[:6]
 }
 
 const sourceSettingsJSON = `{"settings":{}}`
