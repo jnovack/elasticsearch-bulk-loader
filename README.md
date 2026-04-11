@@ -65,6 +65,67 @@ go run ./cmd/es-bulk-loader \
 
 Sample config file: [examples/es-bulk-loader.conf](examples/es-bulk-loader.conf)
 
+## Library Usage
+
+`es-bulk-loader` can now be called directly in-process from Go via [`pkg/loader`](pkg/loader).
+
+Full lifecycle run:
+
+```go
+package main
+
+import (
+	"context"
+	"log"
+
+	loaderpkg "github.com/jnovack/es-bulk-loader/pkg/loader"
+)
+
+func main() {
+	result, err := loaderpkg.Run(context.Background(), loaderpkg.Options{
+		URL:           "http://localhost:9200",
+		Index:         "slugs",
+		SettingsFile:  "./examples/slugs/settings.json",
+		MappingsFile:  "./examples/slugs/mappings.json",
+		PipelinesFile: "./examples/slugs/pipelines.json",
+		PoliciesFile:  "./examples/slugs/policies.json",
+		DataFile:      "./examples/slugs/slugs.json",
+		DeleteIndex:   true,
+		SyncManaged:   true,
+		Enrich: loaderpkg.EnrichOptions{
+			Enabled: true,
+			All:     true,
+		},
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	log.Printf("index=%s processed=%d succeeded=%d failed=%d warnings=%d",
+		result.WriteIndex,
+		result.DocumentsProcessed,
+		result.DocumentsSucceeded,
+		result.DocumentsFailed,
+		len(result.Warnings),
+	)
+}
+```
+
+Targeted helpers are also available for orchestration:
+
+- `loader.SyncManaged(ctx, opts)`
+- `loader.LoadData(ctx, opts)`
+- `loader.ExecuteEnrich(ctx, opts)`
+
+Sentinel error classes are exposed for classification:
+
+- `loader.ErrInvalidOptions`
+- `loader.ErrIndexOperation`
+- `loader.ErrManagedResource`
+- `loader.ErrBulkFailure`
+- `loader.ErrEnrichExecution`
+- `loader.ErrLoaderExecution`
+
 ## Testing
 
 Unit tests stay in the default Go test path:
