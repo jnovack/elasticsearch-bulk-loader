@@ -73,10 +73,27 @@ Unit tests stay in the default Go test path:
 go test ./...
 ```
 
-Docker-backed end-to-end tests live behind the `e2e` build tag:
+Canonical E2E command (also available as `make test-e2e`) uses the tagged suite entrypoint:
 
 ```bash
-go test -tags=e2e ./test
+go test -tags=e2e ./test -run TestEndToEndScenarios
+```
+
+Verbose E2E output:
+
+```bash
+go test -tags=e2e ./test -run TestEndToEndScenarios -v
+```
+
+If you see `build constraints exclude all Go files` for `./test`, the run is missing `-tags=e2e`.
+The E2E package is intentionally build-tagged.
+
+Makefile shortcuts:
+
+```bash
+make test-unit
+make test-e2e
+make test-e2e-verbose
 ```
 
 ## Loader Workflow

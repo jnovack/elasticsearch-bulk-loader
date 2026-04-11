@@ -1,0 +1,7 @@
+{
+  "go.testTags": "e2e",
+  "go.testFlags": [
+    "-run",
+    "TestEndToEndScenarios"
+  ]
+}

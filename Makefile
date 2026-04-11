@@ -17,12 +17,15 @@ IMAGE ?= $(if $(and $(DOCKER_ORGANIZATION),$(DOCKER_REPOSITORY)),$(DOCKER_ORGANI
 
 URL ?= http://127.0.0.1:9200
 
-.PHONY: help docker-build print-vars
+.PHONY: help docker-build print-vars test-unit test-e2e test-e2e-verbose
 
 help:
 	@echo "Targets:"
 	@echo "  make docker-build  Build Docker image using workflow-compatible build args"
 	@echo "  make print-vars    Show resolved Docker build variables"
+	@echo "  make test-unit     Run unit tests"
+	@echo "  make test-e2e      Run canonical Go E2E suite (requires Docker)"
+	@echo "  make test-e2e-verbose  Run canonical Go E2E suite with verbose output"
 
 print-vars:
 	@echo "DOCKERFILE=$(DOCKERFILE)"
@@ -33,6 +36,15 @@ print-vars:
 	@echo "PACKAGE=$(PACKAGE)"
 	@echo "REVISION=$(REVISION)"
 	@echo "VERSION=$(VERSION)"
+
+test-unit:
+	go test ./...
+
+test-e2e:
+	go test -tags=e2e ./test -run TestEndToEndScenarios
+
+test-e2e-verbose:
+	go test -tags=e2e ./test -run TestEndToEndScenarios -v
 
 docker-build:
 	docker buildx build \

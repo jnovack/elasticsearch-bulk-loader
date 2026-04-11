@@ -18,14 +18,25 @@ go test ./...
 Use the tagged E2E suite when you want real Elasticsearch lifecycle coverage:
 
 ```bash
-go test -tags=e2e ./test
+go test -tags=e2e ./test -run TestEndToEndScenarios
 ```
 
 Run the E2E suite in verbose mode to see each scenario and the checks it performs:
 
 ```bash
-go test -tags=e2e -v ./test
+go test -tags=e2e ./test -run TestEndToEndScenarios -v
 ```
+
+Canonical shortcuts from repo root:
+
+```bash
+make test-unit
+make test-e2e
+make test-e2e-verbose
+```
+
+If you see `build constraints exclude all Go files` for `./test`, the command is missing `-tags=e2e`.
+`test/e2e_test.go` is intentionally gated by the `e2e` build tag.
 
 The shell smoke test remains useful for manual debugging:
 

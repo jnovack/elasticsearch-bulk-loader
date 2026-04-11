@@ -345,6 +345,8 @@ func scenarioAliasDeleteCreatesTimestampedIndex(t *testing.T, ctx *scenarioConte
 	args := append(sourceArgsNoPolicies(ctx, "-delete", false, false, ""), "-alias")
 	result := runLoader(t, ctx, nil, args)
 	mustSucceed(t, result)
+	mustContain(t, result.output, "Alias delete detected without -sync-managed; assuming -sync-managed for this run")
+	mustContain(t, result.output, "Alias delete detected without -keep-last; no old timestamped indices will be deleted and storage usage can grow over time.")
 
 	targets := aliasTargets(t, ctx, ctx.sourceIndex)
 	if len(targets) != 1 {
