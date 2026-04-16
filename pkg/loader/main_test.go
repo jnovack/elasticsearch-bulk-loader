@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/elastic/go-elasticsearch/v9"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
@@ -240,6 +241,11 @@ func writeTempJSON(t *testing.T, dir, content string) string {
 	return tmp.Name()
 }
 
+// boolPointer centralizes this code path so package behavior stays consistent.
+func boolPointer(value bool) *bool {
+	return &value
+}
+
 // TestReadNamedDefinitionsExpandsIndexVariable verifies behavior for the related scenario.
 func TestReadNamedDefinitionsExpandsIndexVariable(t *testing.T) {
 	t.Parallel()
@@ -355,6 +361,131 @@ func TestResolveTransformsForSourceRejectsMissingBody(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected missing body error")
 	}
+}
+
+// TestBuildMappingPreflightPlan verifies behavior for the related scenario.
+func TestBuildMappingPreflightPlan(t *testing.T) {
+	t.Parallel()
+
+	path := writeTempJSON(t, t.TempDir(), `{
+		"mappings": {
+			"date_detection": false,
+			"properties": {
+				"notes": {"type":"keyword"},
+				"quantity": {"type":"long"},
+				"card": {"properties": {"name": {"type":"text"}}}
+			}
+		}
+	}`)
+
+	plan, err := buildMappingPreflightPlan(path, nil)
+	if err != nil {
+		t.Fatalf("buildMappingPreflightPlan returned error: %v", err)
+	}
+	if !plan.hasExpectations() {
+		t.Fatal("expected mapping preflight plan with expectations")
+	}
+	if plan.DateDetectionExpected == nil || *plan.DateDetectionExpected {
+		t.Fatalf("expected date_detection=false in plan, got %v", plan.DateDetectionExpected)
+	}
+	if got := plan.RootFieldTypes["notes"]; got != "keyword" {
+		t.Fatalf("notes field type mismatch: got %q want %q", got, "keyword")
+	}
+	if got := plan.RootFieldTypes["quantity"]; got != "long" {
+		t.Fatalf("quantity field type mismatch: got %q want %q", got, "long")
+	}
+	if _, ok := plan.RootFieldTypes["card"]; ok {
+		t.Fatal("expected object field without type to be excluded from root type checks")
+	}
+}
+
+// TestVerifyMappingPreflight verifies behavior for the related scenario.
+func TestVerifyMappingPreflight(t *testing.T) {
+	t.Parallel()
+
+	plan := mappingPreflightPlan{
+		DateDetectionExpected: boolPointer(false),
+		RootFieldTypes: map[string]string{
+			"notes": "keyword",
+		},
+	}
+
+	t.Run("passes with expected date_detection and field types", func(t *testing.T) {
+		t.Parallel()
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("X-Elastic-Product", "Elasticsearch")
+			if r.Method != http.MethodGet || r.URL.Path != "/target-index/_mapping" {
+				t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"target-index":{"mappings":{"date_detection":false,"properties":{"notes":{"type":"keyword"}}}}}`))
+		}))
+		t.Cleanup(server.Close)
+
+		es, err := elasticsearch.NewClient(elasticsearch.Config{Addresses: []string{server.URL}})
+		if err != nil {
+			t.Fatalf("new elasticsearch client: %v", err)
+		}
+
+		if err := verifyMappingPreflight(es, "target-index", plan); err != nil {
+			t.Fatalf("verifyMappingPreflight returned error: %v", err)
+		}
+	})
+
+	t.Run("fails when root field type mismatches", func(t *testing.T) {
+		t.Parallel()
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("X-Elastic-Product", "Elasticsearch")
+			if r.Method != http.MethodGet || r.URL.Path != "/target-index/_mapping" {
+				t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"target-index":{"mappings":{"date_detection":false,"properties":{"notes":{"type":"date"}}}}}`))
+		}))
+		t.Cleanup(server.Close)
+
+		es, err := elasticsearch.NewClient(elasticsearch.Config{Addresses: []string{server.URL}})
+		if err != nil {
+			t.Fatalf("new elasticsearch client: %v", err)
+		}
+
+		err = verifyMappingPreflight(es, "target-index", plan)
+		if err == nil {
+			t.Fatal("expected mapping preflight error")
+		}
+		if !strings.Contains(err.Error(), `field "notes" has type "date", expected "keyword"`) {
+			t.Fatalf("unexpected preflight error: %v", err)
+		}
+	})
+
+	t.Run("fails when date_detection mismatches", func(t *testing.T) {
+		t.Parallel()
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("X-Elastic-Product", "Elasticsearch")
+			if r.Method != http.MethodGet || r.URL.Path != "/target-index/_mapping" {
+				t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"target-index":{"mappings":{"date_detection":true,"properties":{"notes":{"type":"keyword"}}}}}`))
+		}))
+		t.Cleanup(server.Close)
+
+		es, err := elasticsearch.NewClient(elasticsearch.Config{Addresses: []string{server.URL}})
+		if err != nil {
+			t.Fatalf("new elasticsearch client: %v", err)
+		}
+
+		err = verifyMappingPreflight(es, "target-index", plan)
+		if err == nil {
+			t.Fatal("expected date_detection preflight error")
+		}
+		if !strings.Contains(err.Error(), "mappings.date_detection is true, expected false") {
+			t.Fatalf("unexpected preflight error: %v", err)
+		}
+	})
 }
 
 // TestRunStartsTransformsAfterEnrichExecution verifies behavior for the related scenario.

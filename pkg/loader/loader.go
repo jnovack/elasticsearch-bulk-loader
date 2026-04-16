@@ -222,6 +222,12 @@ type transformDefinition struct {
 	Body        json.RawMessage `json:"body"`
 }
 
+// mappingPreflightPlan groups state used to coordinate related package behavior.
+type mappingPreflightPlan struct {
+	DateDetectionExpected *bool
+	RootFieldTypes        map[string]string
+}
+
 // enrichRunSummary groups state used to coordinate related package behavior.
 type enrichRunSummary struct {
 	Selected  []string
@@ -538,6 +544,18 @@ func Run(ctx context.Context, opts Options) (result Result, err error) {
 	if transformErr != nil {
 		fatal().Err(transformErr).Msg("Failed to resolve transform definitions")
 	}
+	logEffectiveManagedAssets(
+		*index,
+		*settingsFile,
+		*mappingsFile,
+		*pipelinesFile,
+		*policiesFile,
+		*transformsFile,
+		pipelineNames,
+		policyNames,
+		logicalTransformNames,
+		transformNames,
+	)
 	enrichSelection := remapEnrichSelection(enrich, policyNameMapping)
 	defaultPipeline := ""
 	if effectiveSyncManaged && len(pipelineNames) > 0 {
@@ -724,6 +742,15 @@ func Run(ctx context.Context, opts Options) (result Result, err error) {
 	}
 
 	if action.requiresDataFile() {
+		preflightPlan, err := buildMappingPreflightPlan(*mappingsFile, variables)
+		if err != nil {
+			fatal().Err(err).Str("path", *mappingsFile).Msg("Failed to build mapping preflight plan")
+		}
+		if preflightPlan.hasExpectations() {
+			if err := verifyMappingPreflight(es, writeIndex, preflightPlan); err != nil {
+				fatal().Err(err).Str("index", writeIndex).Msg("Mapping preflight failed before bulk insert")
+			}
+		}
 		log.Info().Msg("Starting bulk insert")
 
 		f, err := os.Open(*dataFile)
@@ -853,6 +880,209 @@ func ExecuteEnrich(ctx context.Context, opts Options) (Result, error) {
 		opts.Enrich = EnrichOptions{Enabled: true, All: true}
 	}
 	return Run(ctx, opts)
+}
+
+// ─── Managed Asset and Mapping Preflight Helpers ──────────────────────────────
+
+// logEffectiveManagedAssets centralizes this code path so package behavior stays consistent.
+func logEffectiveManagedAssets(index, settingsFile, mappingsFile, pipelinesFile, policiesFile, transformsFile string, pipelineNames, policyNames, logicalTransformNames, selectedTransformNames []string) {
+	log.Info().
+		Str("index", index).
+		Str("settings_file", displayManagedAsset(settingsFile)).
+		Str("mappings_file", displayManagedAsset(mappingsFile)).
+		Str("pipelines_file", displayManagedAsset(pipelinesFile)).
+		Int("pipelines_declared", len(pipelineNames)).
+		Str("policies_file", displayManagedAsset(policiesFile)).
+		Int("policies_declared", len(policyNames)).
+		Str("transforms_file", displayManagedAsset(transformsFile)).
+		Int("transforms_declared", len(logicalTransformNames)).
+		Int("transforms_selected", len(selectedTransformNames)).
+		Msg("Effective managed assets resolved")
+}
+
+// displayManagedAsset centralizes this code path so package behavior stays consistent.
+func displayManagedAsset(path string) string {
+	trimmed := strings.TrimSpace(path)
+	if trimmed == "" {
+		return "none"
+	}
+	return trimmed
+}
+
+// hasExpectations applies method-specific behavior to keep package workflows consistent.
+func (p mappingPreflightPlan) hasExpectations() bool {
+	return p.DateDetectionExpected != nil || len(p.RootFieldTypes) > 0
+}
+
+// buildMappingPreflightPlan centralizes this code path so package behavior stays consistent.
+func buildMappingPreflightPlan(mappingsFile string, variables templateVariables) (mappingPreflightPlan, error) {
+	trimmed := strings.TrimSpace(mappingsFile)
+	if trimmed == "" {
+		return mappingPreflightPlan{}, nil
+	}
+
+	normalized := normalizeIndexSection(trimmed, "mappings", variables)
+	var parsed map[string]any
+	if err := json.Unmarshal([]byte(normalized), &parsed); err != nil {
+		return mappingPreflightPlan{}, fmt.Errorf("parsing mappings preflight source: %w", err)
+	}
+
+	plan := mappingPreflightPlan{
+		RootFieldTypes: make(map[string]string),
+	}
+	if value, ok := parsed["date_detection"]; ok {
+		if expected, ok := value.(bool); ok {
+			plan.DateDetectionExpected = &expected
+		}
+	}
+
+	properties, _ := parsed["properties"].(map[string]any)
+	for fieldName, raw := range properties {
+		fieldMap, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		fieldType, _ := fieldMap["type"].(string)
+		if strings.TrimSpace(fieldType) == "" {
+			continue
+		}
+		plan.RootFieldTypes[fieldName] = fieldType
+	}
+
+	return plan, nil
+}
+
+// verifyMappingPreflight centralizes this code path so package behavior stays consistent.
+func verifyMappingPreflight(es *elasticsearch.Client, index string, plan mappingPreflightPlan) error {
+	mappings, err := fetchIndexMappings(es, index)
+	if err != nil {
+		return err
+	}
+
+	if plan.DateDetectionExpected != nil {
+		actualDateDetection, present := extractDateDetection(mappings)
+		if !present {
+			actualDateDetection = true
+		}
+		if actualDateDetection != *plan.DateDetectionExpected {
+			return fmt.Errorf("mappings.date_detection is %t, expected %t", actualDateDetection, *plan.DateDetectionExpected)
+		}
+	}
+
+	for fieldPath, expectedType := range plan.RootFieldTypes {
+		actualType, ok := resolveFieldType(mappings, fieldPath)
+		if !ok {
+			return fmt.Errorf("required mapping for field %q is missing", fieldPath)
+		}
+		if actualType != expectedType {
+			return fmt.Errorf("field %q has type %q, expected %q", fieldPath, actualType, expectedType)
+		}
+	}
+
+	event := log.Info().
+		Str("index", index).
+		Int("root_field_type_checks", len(plan.RootFieldTypes))
+	if plan.DateDetectionExpected != nil {
+		event = event.Bool("date_detection_expected", *plan.DateDetectionExpected)
+	}
+	event.Msg("Mapping preflight passed")
+	return nil
+}
+
+// fetchIndexMappings centralizes this code path so package behavior stays consistent.
+func fetchIndexMappings(es *elasticsearch.Client, index string) (map[string]any, error) {
+	res, err := es.Indices.GetMapping(es.Indices.GetMapping.WithIndex(index))
+	if err != nil {
+		return nil, fmt.Errorf("fetching mappings for index %q: %w", index, err)
+	}
+	defer res.Body.Close()
+
+	body, _ := io.ReadAll(res.Body)
+	if res.IsError() {
+		return nil, fmt.Errorf("fetching mappings for index %q failed with status %d: %s", index, res.StatusCode, string(body))
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return nil, fmt.Errorf("decoding mappings response for index %q: %w", index, err)
+	}
+	if len(payload) == 0 {
+		return nil, fmt.Errorf("mappings response for index %q was empty", index)
+	}
+
+	var selected map[string]any
+	if raw, ok := payload[index]; ok {
+		selected, _ = raw.(map[string]any)
+	} else {
+		for _, raw := range payload {
+			selected, _ = raw.(map[string]any)
+			if selected != nil {
+				break
+			}
+		}
+	}
+	if selected == nil {
+		return nil, fmt.Errorf("mappings response for index %q did not include an object entry", index)
+	}
+
+	mappings, ok := selected["mappings"].(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("mappings response for index %q did not include a mappings object", index)
+	}
+	return mappings, nil
+}
+
+// extractDateDetection centralizes this code path so package behavior stays consistent.
+func extractDateDetection(mappings map[string]any) (bool, bool) {
+	value, ok := mappings["date_detection"]
+	if !ok {
+		return false, false
+	}
+
+	typed, ok := value.(bool)
+	if !ok {
+		return false, false
+	}
+	return typed, true
+}
+
+// resolveFieldType centralizes this code path so package behavior stays consistent.
+func resolveFieldType(mappings map[string]any, fieldPath string) (string, bool) {
+	current, ok := mappings["properties"].(map[string]any)
+	if !ok {
+		return "", false
+	}
+
+	segments := strings.Split(strings.TrimSpace(fieldPath), ".")
+	for i, segment := range segments {
+		if segment == "" {
+			return "", false
+		}
+
+		fieldRaw, ok := current[segment]
+		if !ok {
+			return "", false
+		}
+		fieldMap, ok := fieldRaw.(map[string]any)
+		if !ok {
+			return "", false
+		}
+
+		if i == len(segments)-1 {
+			fieldType, ok := fieldMap["type"].(string)
+			if !ok {
+				return "", false
+			}
+			return fieldType, true
+		}
+
+		current, ok = fieldMap["properties"].(map[string]any)
+		if !ok {
+			return "", false
+		}
+	}
+
+	return "", false
 }
 
 // ─── Index/Alias Utilities ─────────────────────────────────────────────────────
