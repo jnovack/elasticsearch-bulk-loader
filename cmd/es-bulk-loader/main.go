@@ -149,7 +149,7 @@ func parseLogLevel(level string) (zerolog.Level, error) {
 
 // newConsoleLogger centralizes this code path so package behavior stays consistent.
 func newConsoleLogger(out io.Writer) zerolog.Logger {
-	return zerolog.New(zerolog.ConsoleWriter{Out: out}).With().Timestamp().Logger()
+	return zerolog.New(zerolog.ConsoleWriter{Out: out, TimeFormat: "15:04:05"}).With().Timestamp().Logger()
 }
 
 // ─── Main Execution ────────────────────────────────────────────────────────────

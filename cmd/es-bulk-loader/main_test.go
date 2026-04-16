@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -18,5 +19,8 @@ func TestNewConsoleLoggerIncludesTimestamp(t *testing.T) {
 	}
 	if strings.Contains(logs, "<nil>") {
 		t.Fatalf("expected timestamped console output without <nil>, got: %s", logs)
+	}
+	if !regexp.MustCompile(`\d{1,2}:\d{2}:\d{2}`).MatchString(logs) {
+		t.Fatalf("expected HH:MM:SS timestamp in console output, got: %s", logs)
 	}
 }
