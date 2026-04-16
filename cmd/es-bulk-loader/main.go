@@ -16,24 +16,36 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// ─── Build Metadata ────────────────────────────────────────────────────────────
+
 var (
-	version      = "dev"
+	// version defines package-level state shared by related execution paths.
+	version = "dev"
+	// buildRFC3339 defines package-level state shared by related execution paths.
 	buildRFC3339 = "1970-01-01T00:00:00Z"
-	revision     = "local"
+	// revision defines package-level state shared by related execution paths.
+	revision = "local"
 )
 
 const (
-	defaultVersion      = "dev"
+	// defaultVersion defines package-level values shared by related execution paths.
+	defaultVersion = "dev"
+	// defaultBuildRFC3339 defines package-level values shared by related execution paths.
 	defaultBuildRFC3339 = "1970-01-01T00:00:00Z"
-	defaultRevision     = "local"
+	// defaultRevision defines package-level values shared by related execution paths.
+	defaultRevision = "local"
 )
 
+// ─── Enrich Flag Parsing ───────────────────────────────────────────────────────
+
+// enrichFlagValue groups state used to coordinate related package behavior.
 type enrichFlagValue struct {
 	enabled bool
 	all     bool
 	raw     string
 }
 
+// String returns the canonical textual form used by callers and logs.
 func (e *enrichFlagValue) String() string {
 	if e == nil {
 		return ""
@@ -44,6 +56,7 @@ func (e *enrichFlagValue) String() string {
 	return e.raw
 }
 
+// Set parses and stores caller-provided configuration input.
 func (e *enrichFlagValue) Set(value string) error {
 	e.enabled = true
 	trimmed := strings.TrimSpace(value)
@@ -62,10 +75,12 @@ func (e *enrichFlagValue) Set(value string) error {
 	return nil
 }
 
+// IsBoolFlag reports support for bare boolean flag syntax.
 func (e *enrichFlagValue) IsBoolFlag() bool {
 	return true
 }
 
+// explicitPolicies applies method-specific behavior to keep package workflows consistent.
 func (e *enrichFlagValue) explicitPolicies() []string {
 	if e == nil || !e.enabled || e.all {
 		return nil
@@ -87,6 +102,9 @@ func (e *enrichFlagValue) explicitPolicies() []string {
 	return policies
 }
 
+// ─── Runtime Helpers ───────────────────────────────────────────────────────────
+
+// populateBuildMetadataFromBuildInfo centralizes this code path so package behavior stays consistent.
 func populateBuildMetadataFromBuildInfo() {
 	info, ok := debug.ReadBuildInfo()
 	if !ok {
@@ -111,6 +129,7 @@ func populateBuildMetadataFromBuildInfo() {
 	}
 }
 
+// parseLogLevel centralizes this code path so package behavior stays consistent.
 func parseLogLevel(level string) (zerolog.Level, error) {
 	switch strings.ToLower(strings.TrimSpace(level)) {
 	case "trace":
@@ -128,10 +147,14 @@ func parseLogLevel(level string) (zerolog.Level, error) {
 	}
 }
 
+// newConsoleLogger centralizes this code path so package behavior stays consistent.
 func newConsoleLogger(out io.Writer) zerolog.Logger {
 	return zerolog.New(zerolog.ConsoleWriter{Out: out}).With().Timestamp().Logger()
 }
 
+// ─── Main Execution ────────────────────────────────────────────────────────────
+
+// main centralizes this code path so package behavior stays consistent.
 func main() {
 	populateBuildMetadataFromBuildInfo()
 

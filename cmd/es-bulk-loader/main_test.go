@@ -6,6 +6,7 @@ import (
 	"testing"
 )
 
+// TestNewConsoleLoggerIncludesTimestamp verifies behavior for the related scenario.
 func TestNewConsoleLoggerIncludesTimestamp(t *testing.T) {
 	var output bytes.Buffer
 	logger := newConsoleLogger(&output)

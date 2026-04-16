@@ -21,6 +21,9 @@ import (
 	"time"
 )
 
+// ─── Harness Types ─────────────────────────────────────────────────────────────
+
+// testEnv groups state used to coordinate related package behavior.
 type testEnv struct {
 	repoRoot      string
 	binaryPath    string
@@ -29,6 +32,7 @@ type testEnv struct {
 	httpClient    *http.Client
 }
 
+// scenarioContext groups state used to coordinate related package behavior.
 type scenarioContext struct {
 	env *testEnv
 
@@ -57,11 +61,13 @@ type scenarioContext struct {
 	targetReferenceDir string
 }
 
+// commandResult groups state used to coordinate related package behavior.
 type commandResult struct {
 	output string
 	err    error
 }
 
+// scenario groups state used to coordinate related package behavior.
 type scenario struct {
 	name   string
 	flags  string
@@ -69,8 +75,12 @@ type scenario struct {
 	run    func(t *testing.T, ctx *scenarioContext)
 }
 
+// sharedEnv defines package-level state shared by related execution paths.
 var sharedEnv *testEnv
 
+// ─── Test Entry Points ─────────────────────────────────────────────────────────
+
+// TestMain verifies behavior for the related scenario.
 func TestMain(m *testing.M) {
 	env, err := setupTestEnv()
 	if err != nil {
@@ -91,6 +101,7 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
+// TestEndToEndScenarios verifies behavior for the related scenario.
 func TestEndToEndScenarios(t *testing.T) {
 	scenarios := []scenario{
 		{
@@ -183,6 +194,9 @@ func TestEndToEndScenarios(t *testing.T) {
 	}
 }
 
+// ─── Scenario Implementations ──────────────────────────────────────────────────
+
+// scenarioDeleteSyncManagedEnrich centralizes this code path so package behavior stays consistent.
 func scenarioDeleteSyncManagedEnrich(t *testing.T, ctx *scenarioContext) {
 	result := runLoader(t, ctx, nil, sourceArgs(ctx, ctx.sourceBaseDir, "-delete", true, true, ""))
 	mustSucceed(t, result)
@@ -201,6 +215,7 @@ func scenarioDeleteSyncManagedEnrich(t *testing.T, ctx *scenarioContext) {
 	assertEqual(t, nestedFloat(doc, "_source", "calculated_value"), 21)
 }
 
+// scenarioFlush centralizes this code path so package behavior stays consistent.
 func scenarioFlush(t *testing.T, ctx *scenarioContext) {
 	mustSucceed(t, runLoader(t, ctx, nil, sourceArgs(ctx, ctx.sourceBaseDir, "-delete", true, true, "")))
 
@@ -224,6 +239,7 @@ func scenarioFlush(t *testing.T, ctx *scenarioContext) {
 	assertEqual(t, nestedFloat(doc, "_source", "calculated_value"), 20)
 }
 
+// scenarioFlushSyncManaged centralizes this code path so package behavior stays consistent.
 func scenarioFlushSyncManaged(t *testing.T, ctx *scenarioContext) {
 	mustSucceed(t, runLoader(t, ctx, nil, sourceArgs(ctx, ctx.sourceBaseDir, "-delete", true, true, "")))
 
@@ -243,6 +259,7 @@ func scenarioFlushSyncManaged(t *testing.T, ctx *scenarioContext) {
 	assertMissingField(t, doc, "_source", "pipeline_version")
 }
 
+// scenarioAdd centralizes this code path so package behavior stays consistent.
 func scenarioAdd(t *testing.T, ctx *scenarioContext) {
 	mustSucceed(t, runLoader(t, ctx, nil, sourceArgs(ctx, ctx.sourceBaseDir, "-delete", true, false, "")))
 
@@ -258,6 +275,7 @@ func scenarioAdd(t *testing.T, ctx *scenarioContext) {
 	assertEqual(t, nestedString(doc, "_source", "source_label"), "gamma-20")
 }
 
+// scenarioAddSyncManaged centralizes this code path so package behavior stays consistent.
 func scenarioAddSyncManaged(t *testing.T, ctx *scenarioContext) {
 	mustSucceed(t, runLoader(t, ctx, nil, sourceArgs(ctx, ctx.sourceBaseDir, "-delete", true, false, "")))
 
@@ -273,6 +291,7 @@ func scenarioAddSyncManaged(t *testing.T, ctx *scenarioContext) {
 	assertEqual(t, nestedString(doc, "_source", "source_label"), "gamma-20")
 }
 
+// scenarioDeleteReferencedPolicyFails centralizes this code path so package behavior stays consistent.
 func scenarioDeleteReferencedPolicyFails(t *testing.T, ctx *scenarioContext) {
 	mustSucceed(t, runLoader(t, ctx, nil, sourceArgs(ctx, ctx.sourceBaseDir, "-delete", true, true, "")))
 	mustSucceed(t, runLoader(t, ctx, nil, targetArgs(ctx, "-delete", true)))
@@ -287,6 +306,7 @@ func scenarioDeleteReferencedPolicyFails(t *testing.T, ctx *scenarioContext) {
 	assertPipelineExists(t, ctx, ctx.targetPipelinePrimary)
 }
 
+// scenarioNuke centralizes this code path so package behavior stays consistent.
 func scenarioNuke(t *testing.T, ctx *scenarioContext) {
 	mustSucceed(t, runLoader(t, ctx, nil, sourceArgs(ctx, ctx.sourceBaseDir, "-delete", true, true, "")))
 	mustSucceed(t, runLoader(t, ctx, nil, targetArgs(ctx, "-delete", true)))
@@ -302,6 +322,7 @@ func scenarioNuke(t *testing.T, ctx *scenarioContext) {
 	assertNoDefaultPipeline(t, ctx, ctx.targetIndex)
 }
 
+// scenarioNukeDeleteSyncManaged centralizes this code path so package behavior stays consistent.
 func scenarioNukeDeleteSyncManaged(t *testing.T, ctx *scenarioContext) {
 	mustSucceed(t, runLoader(t, ctx, nil, sourceArgs(ctx, ctx.sourceBaseDir, "-delete", true, true, "")))
 	mustSucceed(t, runLoader(t, ctx, nil, targetArgs(ctx, "-delete", true)))
@@ -319,6 +340,7 @@ func scenarioNukeDeleteSyncManaged(t *testing.T, ctx *scenarioContext) {
 	assertNoDefaultPipeline(t, ctx, ctx.targetIndex)
 }
 
+// scenarioEnrichMissingPolicies centralizes this code path so package behavior stays consistent.
 func scenarioEnrichMissingPolicies(t *testing.T, ctx *scenarioContext) {
 	result := runLoader(t, ctx, nil, sourceArgsNoPolicies(ctx, "-delete", false, true, ""))
 	mustSucceed(t, result)
@@ -329,6 +351,7 @@ func scenarioEnrichMissingPolicies(t *testing.T, ctx *scenarioContext) {
 	assertPolicyMissing(t, ctx, ctx.sourcePolicy)
 }
 
+// scenarioEnrichExplicitUnknownPolicy centralizes this code path so package behavior stays consistent.
 func scenarioEnrichExplicitUnknownPolicy(t *testing.T, ctx *scenarioContext) {
 	mustSucceed(t, runLoader(t, ctx, nil, sourceArgs(ctx, ctx.sourceBaseDir, "-delete", true, true, "")))
 
@@ -341,6 +364,7 @@ func scenarioEnrichExplicitUnknownPolicy(t *testing.T, ctx *scenarioContext) {
 	assertEnrichBackingIndexExists(t, ctx, ctx.sourcePolicy)
 }
 
+// scenarioAliasDeleteCreatesTimestampedIndex centralizes this code path so package behavior stays consistent.
 func scenarioAliasDeleteCreatesTimestampedIndex(t *testing.T, ctx *scenarioContext) {
 	args := append(sourceArgsNoPolicies(ctx, "-delete", false, false, ""), "-alias")
 	result := runLoader(t, ctx, nil, args)
@@ -358,6 +382,7 @@ func scenarioAliasDeleteCreatesTimestampedIndex(t *testing.T, ctx *scenarioConte
 	assertDocCount(t, ctx, ctx.sourceIndex, 2)
 }
 
+// scenarioAliasKeepLastPrunesOldestAfterThirdRun centralizes this code path so package behavior stays consistent.
 func scenarioAliasKeepLastPrunesOldestAfterThirdRun(t *testing.T, ctx *scenarioContext) {
 	baseArgs := []string{
 		"-url", ctx.env.esURL,
@@ -409,6 +434,9 @@ func scenarioAliasKeepLastPrunesOldestAfterThirdRun(t *testing.T, ctx *scenarioC
 	assertDocCount(t, ctx, ctx.sourceIndex, 2)
 }
 
+// ─── Environment and Fixture Setup ─────────────────────────────────────────────
+
+// setupTestEnv centralizes this code path so package behavior stays consistent.
 func setupTestEnv() (*testEnv, error) {
 	repoRoot, err := repoRoot()
 	if err != nil {
@@ -451,6 +479,7 @@ func setupTestEnv() (*testEnv, error) {
 	return env, nil
 }
 
+// teardownTestEnv centralizes this code path so package behavior stays consistent.
 func teardownTestEnv(env *testEnv) error {
 	var errs []string
 	if env.containerName != "" {
@@ -470,6 +499,7 @@ func teardownTestEnv(env *testEnv) error {
 	return nil
 }
 
+// repoRoot centralizes this code path so package behavior stays consistent.
 func repoRoot() (string, error) {
 	_, filename, _, ok := runtime.Caller(0)
 	if !ok {
@@ -478,6 +508,7 @@ func repoRoot() (string, error) {
 	return filepath.Clean(filepath.Join(filepath.Dir(filename), "..")), nil
 }
 
+// startElasticsearchContainer centralizes this code path so package behavior stays consistent.
 func startElasticsearchContainer(containerName string) (string, error) {
 	cmd := exec.Command(
 		"docker", "run", "-d", "-P", "--name", containerName,
@@ -508,6 +539,7 @@ func startElasticsearchContainer(containerName string) (string, error) {
 	return port, nil
 }
 
+// waitForCluster centralizes this code path so package behavior stays consistent.
 func waitForCluster(env *testEnv) error {
 	deadline := time.Now().Add(90 * time.Second)
 	for time.Now().Before(deadline) {
@@ -527,6 +559,7 @@ func waitForCluster(env *testEnv) error {
 	return fmt.Errorf("elasticsearch did not become ready at %s\n%s", env.esURL, string(logs))
 }
 
+// newScenarioContext centralizes this code path so package behavior stays consistent.
 func newScenarioContext(t *testing.T, prefix string) *scenarioContext {
 	t.Helper()
 
@@ -563,6 +596,7 @@ func newScenarioContext(t *testing.T, prefix string) *scenarioContext {
 	return ctx
 }
 
+// writeFixtures applies method-specific behavior to keep package workflows consistent.
 func (ctx *scenarioContext) writeFixtures(t *testing.T) {
 	t.Helper()
 
@@ -616,6 +650,7 @@ func (ctx *scenarioContext) writeFixtures(t *testing.T) {
 	})
 }
 
+// cleanup applies method-specific behavior to keep package workflows consistent.
 func (ctx *scenarioContext) cleanup(t *testing.T) {
 	t.Helper()
 
@@ -637,6 +672,7 @@ func (ctx *scenarioContext) cleanup(t *testing.T) {
 	deletePolicyIfExists(t, ctx, ctx.sourcePolicy)
 }
 
+// writeFixtureDir centralizes this code path so package behavior stays consistent.
 func writeFixtureDir(t *testing.T, dir string, files map[string]string) {
 	t.Helper()
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -649,6 +685,7 @@ func writeFixtureDir(t *testing.T, dir string, files map[string]string) {
 	}
 }
 
+// runLoader centralizes this code path so package behavior stays consistent.
 func runLoader(t *testing.T, ctx *scenarioContext, extraEnv map[string]string, args []string) commandResult {
 	t.Helper()
 
@@ -675,6 +712,7 @@ func runLoader(t *testing.T, ctx *scenarioContext, extraEnv map[string]string, a
 	return commandResult{output: string(output), err: err}
 }
 
+// sourceArgs centralizes this code path so package behavior stays consistent.
 func sourceArgs(ctx *scenarioContext, fixtureDir, action string, syncManaged, enrich bool, enrichValue string) []string {
 	args := []string{
 		"-url", ctx.env.esURL,
@@ -700,6 +738,7 @@ func sourceArgs(ctx *scenarioContext, fixtureDir, action string, syncManaged, en
 	return args
 }
 
+// sourceArgsNoPolicies centralizes this code path so package behavior stays consistent.
 func sourceArgsNoPolicies(ctx *scenarioContext, action string, syncManaged, enrich bool, enrichValue string) []string {
 	args := []string{
 		"-url", ctx.env.esURL,
@@ -723,11 +762,13 @@ func sourceArgsNoPolicies(ctx *scenarioContext, action string, syncManaged, enri
 	return args
 }
 
+// sourceArgsWithNuke centralizes this code path so package behavior stays consistent.
 func sourceArgsWithNuke(ctx *scenarioContext, fixtureDir, action string, syncManaged, enrich bool, enrichValue string) []string {
 	args := sourceArgs(ctx, fixtureDir, action, syncManaged, enrich, enrichValue)
 	return append(args, "-nuke")
 }
 
+// targetArgs centralizes this code path so package behavior stays consistent.
 func targetArgs(ctx *scenarioContext, action string, syncManaged bool) []string {
 	args := []string{
 		"-url", ctx.env.esURL,
@@ -745,6 +786,7 @@ func targetArgs(ctx *scenarioContext, action string, syncManaged bool) []string 
 	return args
 }
 
+// nukeArgs centralizes this code path so package behavior stays consistent.
 func nukeArgs(ctx *scenarioContext) []string {
 	return []string{
 		"-url", ctx.env.esURL,
@@ -755,6 +797,7 @@ func nukeArgs(ctx *scenarioContext) []string {
 	}
 }
 
+// aliasTargets centralizes this code path so package behavior stays consistent.
 func aliasTargets(t *testing.T, ctx *scenarioContext, alias string) []string {
 	t.Helper()
 
@@ -780,6 +823,7 @@ func aliasTargets(t *testing.T, ctx *scenarioContext, alias string) []string {
 	return targets
 }
 
+// singleAliasTarget centralizes this code path so package behavior stays consistent.
 func singleAliasTarget(t *testing.T, ctx *scenarioContext, alias string) string {
 	t.Helper()
 	targets := aliasTargets(t, ctx, alias)
@@ -789,6 +833,7 @@ func singleAliasTarget(t *testing.T, ctx *scenarioContext, alias string) string 
 	return targets[0]
 }
 
+// timestampedIndices centralizes this code path so package behavior stays consistent.
 func timestampedIndices(t *testing.T, ctx *scenarioContext, alias string) []string {
 	t.Helper()
 	var response []map[string]any
@@ -804,6 +849,7 @@ func timestampedIndices(t *testing.T, ctx *scenarioContext, alias string) []stri
 	return indices
 }
 
+// deleteTimestampedIndicesForAlias centralizes this code path so package behavior stays consistent.
 func deleteTimestampedIndicesForAlias(t *testing.T, ctx *scenarioContext, alias string) {
 	t.Helper()
 	for _, index := range timestampedIndices(t, ctx, alias) {
@@ -811,6 +857,7 @@ func deleteTimestampedIndicesForAlias(t *testing.T, ctx *scenarioContext, alias 
 	}
 }
 
+// assertTimestampedIndexName centralizes this code path so package behavior stays consistent.
 func assertTimestampedIndexName(t *testing.T, alias, index string) {
 	t.Helper()
 	if !isTimestampedIndexName(alias, index) {
@@ -818,6 +865,7 @@ func assertTimestampedIndexName(t *testing.T, alias, index string) {
 	}
 }
 
+// isTimestampedIndexName centralizes this code path so package behavior stays consistent.
 func isTimestampedIndexName(alias, index string) bool {
 	prefix := alias + "-"
 	if !strings.HasPrefix(index, prefix) {
@@ -834,6 +882,7 @@ func isTimestampedIndexName(alias, index string) bool {
 	return err == nil
 }
 
+// containsString centralizes this code path so package behavior stays consistent.
 func containsString(values []string, target string) bool {
 	for _, value := range values {
 		if value == target {
@@ -843,6 +892,9 @@ func containsString(values []string, target string) bool {
 	return false
 }
 
+// ─── Assertions and Utilities ──────────────────────────────────────────────────
+
+// assertIndexExists centralizes this code path so package behavior stays consistent.
 func assertIndexExists(t *testing.T, ctx *scenarioContext, index string) {
 	t.Helper()
 	if !indexExists(t, ctx, index) {
@@ -850,6 +902,7 @@ func assertIndexExists(t *testing.T, ctx *scenarioContext, index string) {
 	}
 }
 
+// assertIndexMissing centralizes this code path so package behavior stays consistent.
 func assertIndexMissing(t *testing.T, ctx *scenarioContext, index string) {
 	t.Helper()
 	if indexExists(t, ctx, index) {
@@ -857,6 +910,7 @@ func assertIndexMissing(t *testing.T, ctx *scenarioContext, index string) {
 	}
 }
 
+// indexExists centralizes this code path so package behavior stays consistent.
 func indexExists(t *testing.T, ctx *scenarioContext, index string) bool {
 	t.Helper()
 	resp := doRequest(t, ctx, http.MethodHead, "/"+index, nil)
@@ -864,6 +918,7 @@ func indexExists(t *testing.T, ctx *scenarioContext, index string) bool {
 	return resp.StatusCode == http.StatusOK
 }
 
+// assertDocCount centralizes this code path so package behavior stays consistent.
 func assertDocCount(t *testing.T, ctx *scenarioContext, index string, want int) {
 	t.Helper()
 	refreshIndex(t, ctx, index)
@@ -876,6 +931,7 @@ func assertDocCount(t *testing.T, ctx *scenarioContext, index string, want int) 
 	}
 }
 
+// assertDefaultPipeline centralizes this code path so package behavior stays consistent.
 func assertDefaultPipeline(t *testing.T, ctx *scenarioContext, index, want string) {
 	t.Helper()
 	var response map[string]map[string]map[string]map[string]string
@@ -886,6 +942,7 @@ func assertDefaultPipeline(t *testing.T, ctx *scenarioContext, index, want strin
 	}
 }
 
+// assertNoDefaultPipeline centralizes this code path so package behavior stays consistent.
 func assertNoDefaultPipeline(t *testing.T, ctx *scenarioContext, index string) {
 	t.Helper()
 	var response map[string]map[string]map[string]map[string]string
@@ -899,6 +956,7 @@ func assertNoDefaultPipeline(t *testing.T, ctx *scenarioContext, index string) {
 	}
 }
 
+// assertMappingField centralizes this code path so package behavior stays consistent.
 func assertMappingField(t *testing.T, ctx *scenarioContext, index, field string) {
 	t.Helper()
 	if !mappingFieldExists(t, ctx, index, field) {
@@ -906,6 +964,7 @@ func assertMappingField(t *testing.T, ctx *scenarioContext, index, field string)
 	}
 }
 
+// assertNoMappingField centralizes this code path so package behavior stays consistent.
 func assertNoMappingField(t *testing.T, ctx *scenarioContext, index, field string) {
 	t.Helper()
 	if mappingFieldExists(t, ctx, index, field) {
@@ -913,6 +972,7 @@ func assertNoMappingField(t *testing.T, ctx *scenarioContext, index, field strin
 	}
 }
 
+// mappingFieldExists centralizes this code path so package behavior stays consistent.
 func mappingFieldExists(t *testing.T, ctx *scenarioContext, index, field string) bool {
 	t.Helper()
 	var response map[string]map[string]any
@@ -929,6 +989,7 @@ func mappingFieldExists(t *testing.T, ctx *scenarioContext, index, field string)
 	return ok
 }
 
+// assertPipelineExists centralizes this code path so package behavior stays consistent.
 func assertPipelineExists(t *testing.T, ctx *scenarioContext, name string) {
 	t.Helper()
 	resp := doRequest(t, ctx, http.MethodGet, "/_ingest/pipeline/"+name, nil)
@@ -939,6 +1000,7 @@ func assertPipelineExists(t *testing.T, ctx *scenarioContext, name string) {
 	}
 }
 
+// assertPipelineMissing centralizes this code path so package behavior stays consistent.
 func assertPipelineMissing(t *testing.T, ctx *scenarioContext, name string) {
 	t.Helper()
 	resp := doRequest(t, ctx, http.MethodGet, "/_ingest/pipeline/"+name, nil)
@@ -949,6 +1011,7 @@ func assertPipelineMissing(t *testing.T, ctx *scenarioContext, name string) {
 	}
 }
 
+// assertPolicyExists centralizes this code path so package behavior stays consistent.
 func assertPolicyExists(t *testing.T, ctx *scenarioContext, name string) {
 	t.Helper()
 
@@ -966,6 +1029,7 @@ func assertPolicyExists(t *testing.T, ctx *scenarioContext, name string) {
 	}
 }
 
+// assertPolicyMissing centralizes this code path so package behavior stays consistent.
 func assertPolicyMissing(t *testing.T, ctx *scenarioContext, name string) {
 	t.Helper()
 	for _, policy := range listPolicyNames(t, ctx) {
@@ -989,6 +1053,7 @@ func assertPolicyMissing(t *testing.T, ctx *scenarioContext, name string) {
 	t.Fatalf("expected policy %q to be missing, status=%d body=%s", name, resp.StatusCode, string(body))
 }
 
+// listPolicyNames centralizes this code path so package behavior stays consistent.
 func listPolicyNames(t *testing.T, ctx *scenarioContext) []string {
 	t.Helper()
 	resp := doRequest(t, ctx, http.MethodGet, "/_enrich/policy", nil)
@@ -1024,6 +1089,7 @@ func listPolicyNames(t *testing.T, ctx *scenarioContext) []string {
 	return names
 }
 
+// isManagedPolicyForLogical centralizes this code path so package behavior stays consistent.
 func isManagedPolicyForLogical(logical, candidate string) bool {
 	prefix := logical + "-"
 	if !strings.HasPrefix(candidate, prefix) {
@@ -1041,6 +1107,7 @@ func isManagedPolicyForLogical(logical, candidate string) bool {
 	return true
 }
 
+// assertEnrichBackingIndexExists centralizes this code path so package behavior stays consistent.
 func assertEnrichBackingIndexExists(t *testing.T, ctx *scenarioContext, policy string) {
 	t.Helper()
 	var response []map[string]any
@@ -1053,6 +1120,7 @@ func assertEnrichBackingIndexExists(t *testing.T, ctx *scenarioContext, policy s
 	t.Fatalf("expected enrich backing index for policy %q", policy)
 }
 
+// getDocument centralizes this code path so package behavior stays consistent.
 func getDocument(t *testing.T, ctx *scenarioContext, index, id string) map[string]any {
 	t.Helper()
 	refreshIndex(t, ctx, index)
@@ -1061,6 +1129,7 @@ func getDocument(t *testing.T, ctx *scenarioContext, index, id string) map[strin
 	return response
 }
 
+// refreshIndex centralizes this code path so package behavior stays consistent.
 func refreshIndex(t *testing.T, ctx *scenarioContext, index string) {
 	t.Helper()
 	resp := doRequest(t, ctx, http.MethodPost, "/"+index+"/_refresh", nil)
@@ -1071,6 +1140,7 @@ func refreshIndex(t *testing.T, ctx *scenarioContext, index string) {
 	}
 }
 
+// doRequest centralizes this code path so package behavior stays consistent.
 func doRequest(t *testing.T, ctx *scenarioContext, method, path string, body []byte) *http.Response {
 	t.Helper()
 	var reader io.Reader
@@ -1091,6 +1161,7 @@ func doRequest(t *testing.T, ctx *scenarioContext, method, path string, body []b
 	return resp
 }
 
+// deleteIndexIfExists centralizes this code path so package behavior stays consistent.
 func deleteIndexIfExists(t *testing.T, ctx *scenarioContext, index string) {
 	t.Helper()
 	resp := doRequest(t, ctx, http.MethodDelete, "/"+index, nil)
@@ -1104,6 +1175,7 @@ func deleteIndexIfExists(t *testing.T, ctx *scenarioContext, index string) {
 	}
 }
 
+// deletePipelineIfExists centralizes this code path so package behavior stays consistent.
 func deletePipelineIfExists(t *testing.T, ctx *scenarioContext, name string) {
 	t.Helper()
 	resp := doRequest(t, ctx, http.MethodDelete, "/_ingest/pipeline/"+name, nil)
@@ -1114,6 +1186,7 @@ func deletePipelineIfExists(t *testing.T, ctx *scenarioContext, name string) {
 	}
 }
 
+// deletePolicyIfExists centralizes this code path so package behavior stays consistent.
 func deletePolicyIfExists(t *testing.T, ctx *scenarioContext, name string) {
 	t.Helper()
 	resp := doRequest(t, ctx, http.MethodDelete, "/_enrich/policy/"+name, nil)
@@ -1127,6 +1200,7 @@ func deletePolicyIfExists(t *testing.T, ctx *scenarioContext, name string) {
 	}
 }
 
+// deleteManagedPoliciesForLogical centralizes this code path so package behavior stays consistent.
 func deleteManagedPoliciesForLogical(t *testing.T, ctx *scenarioContext, logical string) {
 	t.Helper()
 	for _, policy := range listPolicyNames(t, ctx) {
@@ -1136,6 +1210,7 @@ func deleteManagedPoliciesForLogical(t *testing.T, ctx *scenarioContext, logical
 	}
 }
 
+// readJSON centralizes this code path so package behavior stays consistent.
 func readJSON(t *testing.T, resp *http.Response, target any) {
 	t.Helper()
 	defer resp.Body.Close()
@@ -1151,6 +1226,7 @@ func readJSON(t *testing.T, resp *http.Response, target any) {
 	}
 }
 
+// mustSucceed centralizes this code path so package behavior stays consistent.
 func mustSucceed(t *testing.T, result commandResult) {
 	t.Helper()
 	if result.err != nil {
@@ -1158,6 +1234,7 @@ func mustSucceed(t *testing.T, result commandResult) {
 	}
 }
 
+// mustFailWith centralizes this code path so package behavior stays consistent.
 func mustFailWith(t *testing.T, result commandResult, substring string) {
 	t.Helper()
 	if result.err == nil {
@@ -1166,6 +1243,7 @@ func mustFailWith(t *testing.T, result commandResult, substring string) {
 	mustContain(t, result.output, substring)
 }
 
+// mustContain centralizes this code path so package behavior stays consistent.
 func mustContain(t *testing.T, output, substring string) {
 	t.Helper()
 	if !strings.Contains(output, substring) {
@@ -1173,6 +1251,7 @@ func mustContain(t *testing.T, output, substring string) {
 	}
 }
 
+// assertEqual centralizes this code path so package behavior stays consistent.
 func assertEqual[T comparable](t *testing.T, got, want T) {
 	t.Helper()
 	if got != want {
@@ -1180,6 +1259,7 @@ func assertEqual[T comparable](t *testing.T, got, want T) {
 	}
 }
 
+// nestedString centralizes this code path so package behavior stays consistent.
 func nestedString(value map[string]any, path ...string) string {
 	current := nestedValue(value, path...)
 	if s, ok := current.(string); ok {
@@ -1188,6 +1268,7 @@ func nestedString(value map[string]any, path ...string) string {
 	return ""
 }
 
+// nestedFloat centralizes this code path so package behavior stays consistent.
 func nestedFloat(value map[string]any, path ...string) float64 {
 	current := nestedValue(value, path...)
 	if f, ok := current.(float64); ok {
@@ -1196,6 +1277,7 @@ func nestedFloat(value map[string]any, path ...string) float64 {
 	return 0
 }
 
+// assertMissingField centralizes this code path so package behavior stays consistent.
 func assertMissingField(t *testing.T, value map[string]any, path ...string) {
 	t.Helper()
 	if nestedValue(value, path...) != nil {
@@ -1203,6 +1285,7 @@ func assertMissingField(t *testing.T, value map[string]any, path ...string) {
 	}
 }
 
+// nestedValue centralizes this code path so package behavior stays consistent.
 func nestedValue(value map[string]any, path ...string) any {
 	var current any = value
 	for _, part := range path {
@@ -1218,6 +1301,7 @@ func nestedValue(value map[string]any, path ...string) any {
 	return current
 }
 
+// managedPolicyNameForLogicalAndIndex centralizes this code path so package behavior stays consistent.
 func managedPolicyNameForLogicalAndIndex(logical, index string) string {
 	raw := map[string]any{
 		"match": map[string]any{
@@ -1234,8 +1318,12 @@ func managedPolicyNameForLogicalAndIndex(logical, index string) string {
 	return logical + "-" + hex.EncodeToString(sum[:])[:6]
 }
 
+// ─── Embedded JSON Fixtures ────────────────────────────────────────────────────
+
+// sourceSettingsJSON defines package-level values shared by related execution paths.
 const sourceSettingsJSON = `{"settings":{}}`
 
+// sourceBaseMappingsJSON defines package-level values shared by related execution paths.
 const sourceBaseMappingsJSON = `{
   "mappings": {
     "properties": {
@@ -1249,6 +1337,7 @@ const sourceBaseMappingsJSON = `{
   }
 }`
 
+// sourceSyncMappingsJSON defines package-level values shared by related execution paths.
 const sourceSyncMappingsJSON = `{
   "mappings": {
     "properties": {
@@ -1264,6 +1353,7 @@ const sourceSyncMappingsJSON = `{
   }
 }`
 
+// sourcePipelinesJSON defines package-level values shared by related execution paths.
 const sourcePipelinesJSON = `{
   "%s": {
     "description": "Default source pipeline",
@@ -1289,6 +1379,7 @@ const sourcePipelinesJSON = `{
   }
 }`
 
+// sourceSyncPipelinesJSON defines package-level values shared by related execution paths.
 const sourceSyncPipelinesJSON = `{
   "%s": {
     "description": "Synced source pipeline",
@@ -1314,6 +1405,7 @@ const sourceSyncPipelinesJSON = `{
   }
 }`
 
+// sourcePoliciesJSON defines package-level values shared by related execution paths.
 const sourcePoliciesJSON = `{
   "%s": {
     "match": {
@@ -1324,6 +1416,7 @@ const sourcePoliciesJSON = `{
   }
 }`
 
+// sourceSyncPoliciesJSON defines package-level values shared by related execution paths.
 const sourceSyncPoliciesJSON = `{
   "%s": {
     "match": {
@@ -1334,21 +1427,26 @@ const sourceSyncPoliciesJSON = `{
   }
 }`
 
+// sourceInitialDataJSON defines package-level values shared by related execution paths.
 const sourceInitialDataJSON = `[
   { "lookup_id": "A1", "base_value": 7, "multiplier": 3, "source_name": "alpha" },
   { "lookup_id": "B2", "base_value": 5, "multiplier": 4, "source_name": "beta" }
 ]`
 
+// sourceReplacementDataJSON defines package-level values shared by related execution paths.
 const sourceReplacementDataJSON = `[
   { "lookup_id": "C3", "base_value": 4, "multiplier": 5, "source_name": "gamma" }
 ]`
 
+// sourceAppendDataJSON defines package-level values shared by related execution paths.
 const sourceAppendDataJSON = `[
   { "lookup_id": "C3", "base_value": 4, "multiplier": 5, "source_name": "gamma" }
 ]`
 
+// targetSettingsJSON defines package-level values shared by related execution paths.
 const targetSettingsJSON = `{"settings":{}}`
 
+// targetMappingsJSON defines package-level values shared by related execution paths.
 const targetMappingsJSON = `{
   "mappings": {
     "properties": {
@@ -1365,6 +1463,7 @@ const targetMappingsJSON = `{
   }
 }`
 
+// targetPipelinesJSON defines package-level values shared by related execution paths.
 const targetPipelinesJSON = `{
   "%s": {
     "description": "Target enrich pipeline",
@@ -1393,6 +1492,7 @@ const targetPipelinesJSON = `{
   }
 }`
 
+// targetDataJSON defines package-level values shared by related execution paths.
 const targetDataJSON = `[
   { "lookup_id": "A1", "target_name": "first" },
   { "lookup_id": "B2", "target_name": "second" }

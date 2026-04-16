@@ -18,6 +18,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// TestEnrichFlagValueBareFlagRunsAllPolicies verifies behavior for the related scenario.
 func TestEnrichFlagValueBareFlagRunsAllPolicies(t *testing.T) {
 	t.Parallel()
 
@@ -38,6 +39,7 @@ func TestEnrichFlagValueBareFlagRunsAllPolicies(t *testing.T) {
 	}
 }
 
+// TestEnrichFlagValueExplicitPolicies verifies behavior for the related scenario.
 func TestEnrichFlagValueExplicitPolicies(t *testing.T) {
 	t.Parallel()
 
@@ -53,6 +55,7 @@ func TestEnrichFlagValueExplicitPolicies(t *testing.T) {
 	}
 }
 
+// TestResolveEnrichTargetsAllPolicies verifies behavior for the related scenario.
 func TestResolveEnrichTargetsAllPolicies(t *testing.T) {
 	t.Parallel()
 
@@ -69,6 +72,7 @@ func TestResolveEnrichTargetsAllPolicies(t *testing.T) {
 	}
 }
 
+// TestResolveEnrichTargetsWarnsForMissingPolicies verifies behavior for the related scenario.
 func TestResolveEnrichTargetsWarnsForMissingPolicies(t *testing.T) {
 	t.Parallel()
 
@@ -85,6 +89,7 @@ func TestResolveEnrichTargetsWarnsForMissingPolicies(t *testing.T) {
 	}
 }
 
+// TestParseLogLevel verifies behavior for the related scenario.
 func TestParseLogLevel(t *testing.T) {
 	t.Parallel()
 
@@ -124,6 +129,7 @@ func TestParseLogLevel(t *testing.T) {
 	}
 }
 
+// TestRunWarningLogIncludesTimestamp verifies behavior for the related scenario.
 func TestRunWarningLogIncludesTimestamp(t *testing.T) {
 	previousLogger := log.Logger
 	previousLevel := zerolog.GlobalLevel()
@@ -155,6 +161,7 @@ func TestRunWarningLogIncludesTimestamp(t *testing.T) {
 	}
 }
 
+// TestReadNamedDefinitionsPreservesFileOrderWithReverseInput verifies behavior for the related scenario.
 func TestReadNamedDefinitionsPreservesFileOrderWithReverseInput(t *testing.T) {
 	t.Parallel()
 
@@ -183,6 +190,7 @@ func TestReadNamedDefinitionsPreservesFileOrderWithReverseInput(t *testing.T) {
 	}
 }
 
+// TestBuildCreateIndexBodySupportsWrappedAndRawSections verifies behavior for the related scenario.
 func TestBuildCreateIndexBodySupportsWrappedAndRawSections(t *testing.T) {
 	t.Parallel()
 
@@ -215,6 +223,7 @@ func TestBuildCreateIndexBodySupportsWrappedAndRawSections(t *testing.T) {
 	}
 }
 
+// writeTempJSON centralizes this code path so package behavior stays consistent.
 func writeTempJSON(t *testing.T, dir, content string) string {
 	t.Helper()
 
@@ -231,6 +240,7 @@ func writeTempJSON(t *testing.T, dir, content string) string {
 	return tmp.Name()
 }
 
+// TestReadNamedDefinitionsExpandsIndexVariable verifies behavior for the related scenario.
 func TestReadNamedDefinitionsExpandsIndexVariable(t *testing.T) {
 	t.Parallel()
 
@@ -252,6 +262,7 @@ func TestReadNamedDefinitionsExpandsIndexVariable(t *testing.T) {
 	}
 }
 
+// TestReadTemplatedFileLeavesUnknownVariablesUntouched verifies behavior for the related scenario.
 func TestReadTemplatedFileLeavesUnknownVariablesUntouched(t *testing.T) {
 	t.Parallel()
 
@@ -268,6 +279,7 @@ func TestReadTemplatedFileLeavesUnknownVariablesUntouched(t *testing.T) {
 	}
 }
 
+// TestBuildTemplateVariablesIncludesAdditionalValues verifies behavior for the related scenario.
 func TestBuildTemplateVariablesIncludesAdditionalValues(t *testing.T) {
 	t.Parallel()
 
@@ -283,6 +295,7 @@ func TestBuildTemplateVariablesIncludesAdditionalValues(t *testing.T) {
 	}
 }
 
+// TestResolveTransformsForSourceFiltersBySourceIndex verifies behavior for the related scenario.
 func TestResolveTransformsForSourceFiltersBySourceIndex(t *testing.T) {
 	t.Parallel()
 
@@ -314,6 +327,7 @@ func TestResolveTransformsForSourceFiltersBySourceIndex(t *testing.T) {
 	}
 }
 
+// TestResolveTransformsForSourceRejectsMissingSourceIndex verifies behavior for the related scenario.
 func TestResolveTransformsForSourceRejectsMissingSourceIndex(t *testing.T) {
 	t.Parallel()
 
@@ -328,6 +342,7 @@ func TestResolveTransformsForSourceRejectsMissingSourceIndex(t *testing.T) {
 	}
 }
 
+// TestResolveTransformsForSourceRejectsMissingBody verifies behavior for the related scenario.
 func TestResolveTransformsForSourceRejectsMissingBody(t *testing.T) {
 	t.Parallel()
 
@@ -342,6 +357,7 @@ func TestResolveTransformsForSourceRejectsMissingBody(t *testing.T) {
 	}
 }
 
+// TestRunStartsTransformsAfterEnrichExecution verifies behavior for the related scenario.
 func TestRunStartsTransformsAfterEnrichExecution(t *testing.T) {
 	t.Parallel()
 
@@ -456,6 +472,7 @@ func TestRunStartsTransformsAfterEnrichExecution(t *testing.T) {
 	}
 }
 
+// TestSelectedDataAction verifies behavior for the related scenario.
 func TestSelectedDataAction(t *testing.T) {
 	t.Parallel()
 
@@ -498,6 +515,7 @@ func TestSelectedDataAction(t *testing.T) {
 	}
 }
 
+// TestPipelineNamesReferencingPolicy verifies behavior for the related scenario.
 func TestPipelineNamesReferencingPolicy(t *testing.T) {
 	t.Parallel()
 
@@ -526,6 +544,7 @@ func TestPipelineNamesReferencingPolicy(t *testing.T) {
 	}
 }
 
+// TestPolicyDeleteBlockedByPipelineReference verifies behavior for the related scenario.
 func TestPolicyDeleteBlockedByPipelineReference(t *testing.T) {
 	t.Parallel()
 
@@ -538,6 +557,7 @@ func TestPolicyDeleteBlockedByPipelineReference(t *testing.T) {
 	}
 }
 
+// TestPipelineDeleteBlockedByDefaultIndex verifies behavior for the related scenario.
 func TestPipelineDeleteBlockedByDefaultIndex(t *testing.T) {
 	t.Parallel()
 
@@ -550,6 +570,7 @@ func TestPipelineDeleteBlockedByDefaultIndex(t *testing.T) {
 	}
 }
 
+// TestBuildTimestampedIndexName verifies behavior for the related scenario.
 func TestBuildTimestampedIndexName(t *testing.T) {
 	t.Parallel()
 
@@ -559,6 +580,7 @@ func TestBuildTimestampedIndexName(t *testing.T) {
 	}
 }
 
+// TestParseTimestampedIndexName verifies behavior for the related scenario.
 func TestParseTimestampedIndexName(t *testing.T) {
 	t.Parallel()
 
@@ -615,6 +637,7 @@ func TestParseTimestampedIndexName(t *testing.T) {
 	}
 }
 
+// TestNextAvailableTimestampedIndexNameWithCheck verifies behavior for the related scenario.
 func TestNextAvailableTimestampedIndexNameWithCheck(t *testing.T) {
 	t.Parallel()
 
@@ -637,6 +660,7 @@ func TestNextAvailableTimestampedIndexNameWithCheck(t *testing.T) {
 	}
 }
 
+// TestNextAvailableTimestampedIndexNameWithCheckPropagatesErrors verifies behavior for the related scenario.
 func TestNextAvailableTimestampedIndexNameWithCheckPropagatesErrors(t *testing.T) {
 	t.Parallel()
 
@@ -648,6 +672,7 @@ func TestNextAvailableTimestampedIndexNameWithCheckPropagatesErrors(t *testing.T
 	}
 }
 
+// TestManagedPolicyNameIsStableAndShortHashed verifies behavior for the related scenario.
 func TestManagedPolicyNameIsStableAndShortHashed(t *testing.T) {
 	t.Parallel()
 
@@ -661,6 +686,7 @@ func TestManagedPolicyNameIsStableAndShortHashed(t *testing.T) {
 	}
 }
 
+// TestRewritePipelinePolicyReferences verifies behavior for the related scenario.
 func TestRewritePipelinePolicyReferences(t *testing.T) {
 	t.Parallel()
 
@@ -696,6 +722,7 @@ func TestRewritePipelinePolicyReferences(t *testing.T) {
 	}
 }
 
+// TestRemapEnrichSelectionMapsLogicalNames verifies behavior for the related scenario.
 func TestRemapEnrichSelectionMapsLogicalNames(t *testing.T) {
 	t.Parallel()
 

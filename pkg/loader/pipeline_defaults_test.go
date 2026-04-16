@@ -8,6 +8,7 @@ import (
 	"testing"
 )
 
+// TestReadNamedDefinitionsPreservesFileOrder verifies behavior for the related scenario.
 func TestReadNamedDefinitionsPreservesFileOrder(t *testing.T) {
 	t.Parallel()
 
@@ -38,6 +39,7 @@ func TestReadNamedDefinitionsPreservesFileOrder(t *testing.T) {
 	}
 }
 
+// TestNormalizeIndexSettingsUsesFirstPipelineWhenUnset verifies behavior for the related scenario.
 func TestNormalizeIndexSettingsUsesFirstPipelineWhenUnset(t *testing.T) {
 	t.Parallel()
 
@@ -62,6 +64,7 @@ func TestNormalizeIndexSettingsUsesFirstPipelineWhenUnset(t *testing.T) {
 	}
 }
 
+// TestNormalizeIndexSettingsPreservesExplicitDefault verifies behavior for the related scenario.
 func TestNormalizeIndexSettingsPreservesExplicitDefault(t *testing.T) {
 	t.Parallel()
 
@@ -83,6 +86,7 @@ func TestNormalizeIndexSettingsPreservesExplicitDefault(t *testing.T) {
 	}
 }
 
+// TestNormalizeIndexSettingsFlattensNestedIndexObject verifies behavior for the related scenario.
 func TestNormalizeIndexSettingsFlattensNestedIndexObject(t *testing.T) {
 	t.Parallel()
 
@@ -116,6 +120,7 @@ func TestNormalizeIndexSettingsFlattensNestedIndexObject(t *testing.T) {
 	}
 }
 
+// TestIsUnsupportedEnrichAPI verifies behavior for the related scenario.
 func TestIsUnsupportedEnrichAPI(t *testing.T) {
 	t.Parallel()
 
@@ -132,6 +137,7 @@ func TestIsUnsupportedEnrichAPI(t *testing.T) {
 	}
 }
 
+// TestResolveEnrichTargetsUsesDeclaredPoliciesWhenRequestedAll verifies behavior for the related scenario.
 func TestResolveEnrichTargetsUsesDeclaredPoliciesWhenRequestedAll(t *testing.T) {
 	t.Parallel()
 

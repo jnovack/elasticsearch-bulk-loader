@@ -25,21 +25,33 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// ─── Error Sentinels ───────────────────────────────────────────────────────────
+
 var (
-	ErrInvalidOptions  = errors.New("invalid options")
-	ErrIndexOperation  = errors.New("index operation failed")
+	// ErrInvalidOptions defines package-level state shared by related execution paths.
+	ErrInvalidOptions = errors.New("invalid options")
+	// ErrIndexOperation defines package-level state shared by related execution paths.
+	ErrIndexOperation = errors.New("index operation failed")
+	// ErrManagedResource defines package-level state shared by related execution paths.
 	ErrManagedResource = errors.New("managed resource failed")
-	ErrBulkFailure     = errors.New("bulk insert failed")
+	// ErrBulkFailure defines package-level state shared by related execution paths.
+	ErrBulkFailure = errors.New("bulk insert failed")
+	// ErrEnrichExecution defines package-level state shared by related execution paths.
 	ErrEnrichExecution = errors.New("enrich execution failed")
+	// ErrLoaderExecution defines package-level state shared by related execution paths.
 	ErrLoaderExecution = errors.New("loader execution failed")
 )
 
+// ─── Core Runtime Types ────────────────────────────────────────────────────────
+
+// RunError groups state used to coordinate related package behavior.
 type RunError struct {
 	Kind error
 	Op   string
 	Err  error
 }
 
+// Error returns the composed error message used by callers.
 func (e *RunError) Error() string {
 	if e == nil {
 		return ""
@@ -53,6 +65,7 @@ func (e *RunError) Error() string {
 	return e.Op + ": " + e.Err.Error()
 }
 
+// Unwrap exposes the wrapped error for errors.Is and errors.As checks.
 func (e *RunError) Unwrap() error {
 	if e == nil {
 		return nil
@@ -60,6 +73,7 @@ func (e *RunError) Unwrap() error {
 	return e.Err
 }
 
+// Is matches this error against sentinel kinds used by callers.
 func (e *RunError) Is(target error) bool {
 	if e == nil {
 		return false
@@ -70,6 +84,7 @@ func (e *RunError) Is(target error) bool {
 	return errors.Is(e.Kind, target)
 }
 
+// EnrichOptions groups state used to coordinate related package behavior.
 type EnrichOptions struct {
 	Enabled  bool
 	All      bool
@@ -77,6 +92,7 @@ type EnrichOptions struct {
 	Policies []string
 }
 
+// Options groups state used to coordinate related package behavior.
 type Options struct {
 	URL                string
 	InsecureSkipVerify bool
@@ -103,6 +119,7 @@ type Options struct {
 	Enrich             EnrichOptions
 }
 
+// Result groups state used to coordinate related package behavior.
 type Result struct {
 	ResolvedAliasTarget string
 	WriteIndex          string
@@ -117,11 +134,13 @@ type Result struct {
 	Warnings            []string
 }
 
+// bulkResponse groups state used to coordinate related package behavior.
 type bulkResponse struct {
 	Errors bool                          `json:"errors"`
 	Items  []map[string]bulkItemResponse `json:"items"`
 }
 
+// bulkItemResponse groups state used to coordinate related package behavior.
 type bulkItemResponse struct {
 	Index  string         `json:"_index"`
 	ID     string         `json:"_id"`
@@ -129,45 +148,58 @@ type bulkItemResponse struct {
 	Error  *bulkItemError `json:"error,omitempty"`
 }
 
+// bulkItemError groups state used to coordinate related package behavior.
 type bulkItemError struct {
 	Type   string `json:"type"`
 	Reason string `json:"reason"`
 }
 
+// bulkInsertResult groups state used to coordinate related package behavior.
 type bulkInsertResult struct {
 	Succeeded int
 	Failed    int
 }
 
+// namedDefinitions groups state used to coordinate related package behavior.
 type namedDefinitions map[string]json.RawMessage
 
+// templateVariables groups state used to coordinate related package behavior.
 type templateVariables map[string]string
 
+// enrichFlagValue groups state used to coordinate related package behavior.
 type enrichFlagValue struct {
 	enabled bool
 	all     bool
 	raw     string
 }
 
+// dataAction groups state used to coordinate related package behavior.
 type dataAction string
 
 const (
-	dataActionNone   dataAction = ""
-	dataActionAdd    dataAction = "add"
-	dataActionFlush  dataAction = "flush"
+	// dataActionNone defines package-level values shared by related execution paths.
+	dataActionNone dataAction = ""
+	// dataActionAdd defines package-level values shared by related execution paths.
+	dataActionAdd dataAction = "add"
+	// dataActionFlush defines package-level values shared by related execution paths.
+	dataActionFlush dataAction = "flush"
+	// dataActionDelete defines package-level values shared by related execution paths.
 	dataActionDelete dataAction = "delete"
 )
 
+// enrichPolicySummary groups state used to coordinate related package behavior.
 type enrichPolicySummary struct {
 	Config map[string]struct {
 		Name string `json:"name"`
 	} `json:"config"`
 }
 
+// enrichPoliciesResponse groups state used to coordinate related package behavior.
 type enrichPoliciesResponse struct {
 	Policies []enrichPolicySummary `json:"policies"`
 }
 
+// enrichExecuteResponse groups state used to coordinate related package behavior.
 type enrichExecuteResponse struct {
 	Status *struct {
 		Phase string `json:"phase"`
@@ -175,6 +207,7 @@ type enrichExecuteResponse struct {
 	Task *string `json:"task,omitempty"`
 }
 
+// managedPolicyPlan groups state used to coordinate related package behavior.
 type managedPolicyPlan struct {
 	LogicalNames     []string
 	DesiredNames     []string
@@ -183,11 +216,13 @@ type managedPolicyPlan struct {
 	DesiredSet       map[string]struct{}
 }
 
+// transformDefinition groups state used to coordinate related package behavior.
 type transformDefinition struct {
 	SourceIndex string          `json:"source_index"`
 	Body        json.RawMessage `json:"body"`
 }
 
+// enrichRunSummary groups state used to coordinate related package behavior.
 type enrichRunSummary struct {
 	Selected  []string
 	Missing   []string
@@ -195,6 +230,9 @@ type enrichRunSummary struct {
 	Failed    int
 }
 
+// ─── Option Parsing Helpers ────────────────────────────────────────────────────
+
+// String returns the canonical textual form used by callers and logs.
 func (e *enrichFlagValue) String() string {
 	if e == nil {
 		return ""
@@ -205,6 +243,7 @@ func (e *enrichFlagValue) String() string {
 	return e.raw
 }
 
+// Set parses and stores caller-provided configuration input.
 func (e *enrichFlagValue) Set(value string) error {
 	e.enabled = true
 	trimmed := strings.TrimSpace(value)
@@ -223,10 +262,12 @@ func (e *enrichFlagValue) Set(value string) error {
 	return nil
 }
 
+// IsBoolFlag reports support for bare boolean flag syntax.
 func (e *enrichFlagValue) IsBoolFlag() bool {
 	return true
 }
 
+// explicitPolicies applies method-specific behavior to keep package workflows consistent.
 func (e *enrichFlagValue) explicitPolicies() []string {
 	if e == nil || !e.enabled || e.all {
 		return nil
@@ -248,6 +289,7 @@ func (e *enrichFlagValue) explicitPolicies() []string {
 	return policies
 }
 
+// enrichFromOptions centralizes this code path so package behavior stays consistent.
 func enrichFromOptions(enrich EnrichOptions) *enrichFlagValue {
 	selection := &enrichFlagValue{
 		enabled: enrich.Enabled,
@@ -269,6 +311,7 @@ func enrichFromOptions(enrich EnrichOptions) *enrichFlagValue {
 	return selection
 }
 
+// classifyRunErrorKind centralizes this code path so package behavior stays consistent.
 func classifyRunErrorKind(op string) error {
 	lowered := strings.ToLower(op)
 	switch {
@@ -285,35 +328,44 @@ func classifyRunErrorKind(op string) error {
 	}
 }
 
+// ─── Fatal/Error Bridging ──────────────────────────────────────────────────────
+
+// fatalEvent groups state used to coordinate related package behavior.
 type fatalEvent struct {
 	event *zerolog.Event
 	cause error
 }
 
+// fatal centralizes this code path so package behavior stays consistent.
 func fatal() *fatalEvent {
 	return &fatalEvent{event: log.WithLevel(zerolog.FatalLevel)}
 }
 
+// Str applies method-specific behavior to keep package workflows consistent.
 func (f *fatalEvent) Str(key, value string) *fatalEvent {
 	f.event.Str(key, value)
 	return f
 }
 
+// Strs applies method-specific behavior to keep package workflows consistent.
 func (f *fatalEvent) Strs(key string, value []string) *fatalEvent {
 	f.event.Strs(key, value)
 	return f
 }
 
+// Int applies method-specific behavior to keep package workflows consistent.
 func (f *fatalEvent) Int(key string, value int) *fatalEvent {
 	f.event.Int(key, value)
 	return f
 }
 
+// Float64 applies method-specific behavior to keep package workflows consistent.
 func (f *fatalEvent) Float64(key string, value float64) *fatalEvent {
 	f.event.Float64(key, value)
 	return f
 }
 
+// Err applies method-specific behavior to keep package workflows consistent.
 func (f *fatalEvent) Err(err error) *fatalEvent {
 	if err != nil {
 		f.cause = err
@@ -322,6 +374,7 @@ func (f *fatalEvent) Err(err error) *fatalEvent {
 	return f
 }
 
+// panicWithMessage applies method-specific behavior to keep package workflows consistent.
 func (f *fatalEvent) panicWithMessage(message string) {
 	f.event.Msg(message)
 	cause := f.cause
@@ -335,18 +388,24 @@ func (f *fatalEvent) panicWithMessage(message string) {
 	})
 }
 
+// Msg emits a fatal event message and terminates the current run path.
 func (f *fatalEvent) Msg(message string) {
 	f.panicWithMessage(message)
 }
 
+// Msgf formats a fatal event message and terminates the current run path.
 func (f *fatalEvent) Msgf(format string, args ...any) {
 	f.panicWithMessage(fmt.Sprintf(format, args...))
 }
 
+// withTimestampLogger centralizes this code path so package behavior stays consistent.
 func withTimestampLogger(base zerolog.Logger) zerolog.Logger {
 	return base.With().Timestamp().Logger()
 }
 
+// ─── Primary Execution Entry Points ────────────────────────────────────────────
+
+// Run centralizes this code path so package behavior stays consistent.
 func Run(ctx context.Context, opts Options) (result Result, err error) {
 	_ = ctx
 	previousLogger := log.Logger
@@ -766,6 +825,7 @@ func Run(ctx context.Context, opts Options) (result Result, err error) {
 	return result, nil
 }
 
+// SyncManaged centralizes this code path so package behavior stays consistent.
 func SyncManaged(ctx context.Context, opts Options) (Result, error) {
 	opts.AddToIndex = false
 	opts.FlushIndex = false
@@ -775,6 +835,7 @@ func SyncManaged(ctx context.Context, opts Options) (Result, error) {
 	return Run(ctx, opts)
 }
 
+// LoadData centralizes this code path so package behavior stays consistent.
 func LoadData(ctx context.Context, opts Options) (Result, error) {
 	if !opts.AddToIndex && !opts.FlushIndex && !opts.DeleteIndex {
 		opts.AddToIndex = true
@@ -782,6 +843,7 @@ func LoadData(ctx context.Context, opts Options) (Result, error) {
 	return Run(ctx, opts)
 }
 
+// ExecuteEnrich centralizes this code path so package behavior stays consistent.
 func ExecuteEnrich(ctx context.Context, opts Options) (Result, error) {
 	opts.AddToIndex = false
 	opts.FlushIndex = false
@@ -793,6 +855,9 @@ func ExecuteEnrich(ctx context.Context, opts Options) (Result, error) {
 	return Run(ctx, opts)
 }
 
+// ─── Index/Alias Utilities ─────────────────────────────────────────────────────
+
+// parseLogLevel centralizes this code path so package behavior stays consistent.
 func parseLogLevel(level string) (zerolog.Level, error) {
 	switch strings.ToLower(strings.TrimSpace(level)) {
 	case "trace":
@@ -810,10 +875,12 @@ func parseLogLevel(level string) (zerolog.Level, error) {
 	}
 }
 
+// buildTimestampedIndexName centralizes this code path so package behavior stays consistent.
 func buildTimestampedIndexName(alias string, now time.Time) string {
 	return fmt.Sprintf("%s-%s", alias, now.Format("20060102150405"))
 }
 
+// nextAvailableTimestampedIndexName centralizes this code path so package behavior stays consistent.
 func nextAvailableTimestampedIndexName(es *elasticsearch.Client, alias string, base time.Time) string {
 	name, err := nextAvailableTimestampedIndexNameWithCheck(alias, base, func(candidate string) (bool, error) {
 		return indexExists(es, candidate)
@@ -822,6 +889,7 @@ func nextAvailableTimestampedIndexName(es *elasticsearch.Client, alias string, b
 	return name
 }
 
+// nextAvailableTimestampedIndexNameWithCheck centralizes this code path so package behavior stays consistent.
 func nextAvailableTimestampedIndexNameWithCheck(alias string, base time.Time, existsFn func(candidate string) (bool, error)) (string, error) {
 	candidateTime := base.UTC()
 	for attempt := 0; attempt < 300; attempt++ {
@@ -844,6 +912,7 @@ func nextAvailableTimestampedIndexNameWithCheck(alias string, base time.Time, ex
 	return "", fmt.Errorf("unable to find an available timestamped index name for alias %q", alias)
 }
 
+// resolveAliasTargets centralizes this code path so package behavior stays consistent.
 func resolveAliasTargets(es *elasticsearch.Client, alias string) []string {
 	res, err := es.Indices.GetAlias(es.Indices.GetAlias.WithName(alias))
 	checkErr("resolving alias targets", err)
@@ -874,6 +943,7 @@ func resolveAliasTargets(es *elasticsearch.Client, alias string) []string {
 	return targets
 }
 
+// updateAlias centralizes this code path so package behavior stays consistent.
 func updateAlias(es *elasticsearch.Client, alias, index string) {
 	current := resolveAliasTargets(es, alias)
 
@@ -913,6 +983,7 @@ func updateAlias(es *elasticsearch.Client, alias, index string) {
 	log.Info().Str("alias", alias).Str("index", index).Msg("Alias now points to index")
 }
 
+// deleteIndices centralizes this code path so package behavior stays consistent.
 func deleteIndices(es *elasticsearch.Client, indices []string) {
 	for _, index := range indices {
 		deleteAndCheck(es, index)
@@ -920,11 +991,13 @@ func deleteIndices(es *elasticsearch.Client, indices []string) {
 	}
 }
 
+// timestampedIndex groups state used to coordinate related package behavior.
 type timestampedIndex struct {
 	Name      string
 	Timestamp time.Time
 }
 
+// listTimestampedIndices centralizes this code path so package behavior stays consistent.
 func listTimestampedIndices(es *elasticsearch.Client, alias string) []timestampedIndex {
 	pattern := alias + "-*"
 	res, err := es.Indices.Get([]string{pattern})
@@ -959,6 +1032,7 @@ func listTimestampedIndices(es *elasticsearch.Client, alias string) []timestampe
 	return result
 }
 
+// parseTimestampedIndexName centralizes this code path so package behavior stays consistent.
 func parseTimestampedIndexName(alias, index string) (time.Time, bool) {
 	prefix := alias + "-"
 	if !strings.HasPrefix(index, prefix) {
@@ -981,6 +1055,7 @@ func parseTimestampedIndexName(alias, index string) (time.Time, bool) {
 	return parsed, true
 }
 
+// pruneTimestampedIndices centralizes this code path so package behavior stays consistent.
 func pruneTimestampedIndices(es *elasticsearch.Client, alias string, keepLast int) {
 	if keepLast <= 0 {
 		return
@@ -1004,6 +1079,9 @@ func pruneTimestampedIndices(es *elasticsearch.Client, alias string, keepLast in
 	deleteIndices(es, toDelete)
 }
 
+// ─── Settings, Mappings, and Template Utilities ───────────────────────────────
+
+// checkErr centralizes this code path so package behavior stays consistent.
 func checkErr(op string, err error) {
 	log.Trace().Msg(op)
 	if err != nil {
@@ -1015,10 +1093,12 @@ func checkErr(op string, err error) {
 	}
 }
 
+// requiresDataFile applies method-specific behavior to keep package workflows consistent.
 func (a dataAction) requiresDataFile() bool {
 	return a != dataActionNone
 }
 
+// selectedDataAction centralizes this code path so package behavior stays consistent.
 func selectedDataAction(addToIndex, flushIndex, deleteIndex bool) (dataAction, error) {
 	actionCount := 0
 	if addToIndex {
@@ -1046,6 +1126,7 @@ func selectedDataAction(addToIndex, flushIndex, deleteIndex bool) (dataAction, e
 	}
 }
 
+// indexExists centralizes this code path so package behavior stays consistent.
 func indexExists(es *elasticsearch.Client, index string) (bool, error) {
 	res, err := es.Indices.Exists([]string{index})
 	if err != nil {
@@ -1063,6 +1144,7 @@ func indexExists(es *elasticsearch.Client, index string) (bool, error) {
 	}
 }
 
+// waitForIndex centralizes this code path so package behavior stays consistent.
 func waitForIndex(es *elasticsearch.Client, index string) {
 	for i := 0; i < 20; i++ {
 		exists, err := indexExists(es, index)
@@ -1076,6 +1158,7 @@ func waitForIndex(es *elasticsearch.Client, index string) {
 	fatal().Str("index", index).Msg("Index create was acknowledged but the index did not become visible")
 }
 
+// deleteAndCheck centralizes this code path so package behavior stays consistent.
 func deleteAndCheck(es *elasticsearch.Client, index string) {
 	res, err := es.Indices.Delete([]string{index})
 	checkErr("deleting index", err)
@@ -1086,6 +1169,7 @@ func deleteAndCheck(es *elasticsearch.Client, index string) {
 	}
 }
 
+// flushAndCheck centralizes this code path so package behavior stays consistent.
 func flushAndCheck(es *elasticsearch.Client, index string) {
 	query := `{"query":{"match_all":{}}}`
 	res, err := es.DeleteByQuery(
@@ -1102,6 +1186,7 @@ func flushAndCheck(es *elasticsearch.Client, index string) {
 	}
 }
 
+// buildCreateIndexBody centralizes this code path so package behavior stays consistent.
 func buildCreateIndexBody(settingsFile, mappingsFile, defaultPipeline string, variables templateVariables) string {
 	settings := normalizeIndexSettings(settingsFile, defaultPipeline, variables)
 	mappings := normalizeIndexSection(mappingsFile, "mappings", variables)
@@ -1109,6 +1194,7 @@ func buildCreateIndexBody(settingsFile, mappingsFile, defaultPipeline string, va
 	return fmt.Sprintf(`{"settings": %s, "mappings": %s}`, settings, mappings)
 }
 
+// normalizeIndexSettings centralizes this code path so package behavior stays consistent.
 func normalizeIndexSettings(path, defaultPipeline string, variables templateVariables) string {
 	settings := make(map[string]json.RawMessage)
 	if path != "" {
@@ -1164,10 +1250,12 @@ func normalizeIndexSettings(path, defaultPipeline string, variables templateVari
 	return string(normalized)
 }
 
+// normalizeSettingKey centralizes this code path so package behavior stays consistent.
 func normalizeSettingKey(key string) string {
 	return strings.TrimPrefix(key, "index.")
 }
 
+// normalizeIndexSection centralizes this code path so package behavior stays consistent.
 func normalizeIndexSection(path, section string, variables templateVariables) string {
 	if path == "" {
 		return "{}"
@@ -1190,6 +1278,7 @@ func normalizeIndexSection(path, section string, variables templateVariables) st
 	return string(content)
 }
 
+// readNamedDefinitions centralizes this code path so package behavior stays consistent.
 func readNamedDefinitions(path, resourceType string, variables templateVariables) (namedDefinitions, []string) {
 	if path == "" {
 		return nil, nil
@@ -1240,6 +1329,7 @@ func readNamedDefinitions(path, resourceType string, variables templateVariables
 	return definitions, names
 }
 
+// buildManagedPolicyPlan centralizes this code path so package behavior stays consistent.
 func buildManagedPolicyPlan(definitions namedDefinitions, logicalNames []string) managedPolicyPlan {
 	plan := managedPolicyPlan{
 		LogicalNames:     append([]string(nil), logicalNames...),
@@ -1268,6 +1358,7 @@ func buildManagedPolicyPlan(definitions namedDefinitions, logicalNames []string)
 	return plan
 }
 
+// managedPolicyName centralizes this code path so package behavior stays consistent.
 func managedPolicyName(logicalName string, definition json.RawMessage) string {
 	canonical, err := canonicalizeRawJSON(definition)
 	if err != nil {
@@ -1279,6 +1370,7 @@ func managedPolicyName(logicalName string, definition json.RawMessage) string {
 	return logicalName + "-" + suffix
 }
 
+// canonicalizeRawJSON centralizes this code path so package behavior stays consistent.
 func canonicalizeRawJSON(raw json.RawMessage) ([]byte, error) {
 	var parsed any
 	if err := json.Unmarshal(raw, &parsed); err != nil {
@@ -1287,6 +1379,7 @@ func canonicalizeRawJSON(raw json.RawMessage) ([]byte, error) {
 	return json.Marshal(parsed)
 }
 
+// rewritePipelinePolicyReferences centralizes this code path so package behavior stays consistent.
 func rewritePipelinePolicyReferences(definitions namedDefinitions, names []string, logicalToDesired map[string]string) namedDefinitions {
 	if len(definitions) == 0 || len(logicalToDesired) == 0 {
 		return definitions
@@ -1327,6 +1420,7 @@ func rewritePipelinePolicyReferences(definitions namedDefinitions, names []strin
 	return rewritten
 }
 
+// resolvePipelinePolicyFallbacks centralizes this code path so package behavior stays consistent.
 func resolvePipelinePolicyFallbacks(es *elasticsearch.Client, definitions namedDefinitions, names []string, policyNameMapping map[string]string) {
 	referenced := collectReferencedPolicyNamesFromPipelines(definitions, names)
 	if len(referenced) == 0 {
@@ -1378,6 +1472,7 @@ func resolvePipelinePolicyFallbacks(es *elasticsearch.Client, definitions namedD
 	}
 }
 
+// rewriteEnrichPolicyNameReferences centralizes this code path so package behavior stays consistent.
 func rewriteEnrichPolicyNameReferences(value any, logicalToDesired map[string]string) int {
 	replacements := 0
 	switch typed := value.(type) {
@@ -1401,6 +1496,7 @@ func rewriteEnrichPolicyNameReferences(value any, logicalToDesired map[string]st
 	return replacements
 }
 
+// collectReferencedPolicyNamesFromPipelines centralizes this code path so package behavior stays consistent.
 func collectReferencedPolicyNamesFromPipelines(definitions namedDefinitions, names []string) []string {
 	seen := make(map[string]struct{})
 	for _, name := range names {
@@ -1419,6 +1515,7 @@ func collectReferencedPolicyNamesFromPipelines(definitions namedDefinitions, nam
 	return referenced
 }
 
+// collectPolicyNamesInValue centralizes this code path so package behavior stays consistent.
 func collectPolicyNamesInValue(value any, seen map[string]struct{}) {
 	switch typed := value.(type) {
 	case map[string]any:
@@ -1437,6 +1534,7 @@ func collectPolicyNamesInValue(value any, seen map[string]struct{}) {
 	}
 }
 
+// resolveManagedPolicyDeleteNames centralizes this code path so package behavior stays consistent.
 func resolveManagedPolicyDeleteNames(es *elasticsearch.Client, logicalNames []string) []string {
 	if len(logicalNames) == 0 {
 		return nil
@@ -1465,6 +1563,7 @@ func resolveManagedPolicyDeleteNames(es *elasticsearch.Client, logicalNames []st
 	return deleteNames
 }
 
+// managedPolicyNameMatchesLogical centralizes this code path so package behavior stays consistent.
 func managedPolicyNameMatchesLogical(logicalName, policyName string) bool {
 	prefix := logicalName + "-"
 	if !strings.HasPrefix(policyName, prefix) {
@@ -1483,6 +1582,7 @@ func managedPolicyNameMatchesLogical(logicalName, policyName string) bool {
 	return true
 }
 
+// remapEnrichSelection centralizes this code path so package behavior stays consistent.
 func remapEnrichSelection(enrich *enrichFlagValue, logicalToDesired map[string]string) *enrichFlagValue {
 	if enrich == nil || !enrich.enabled || enrich.all || len(logicalToDesired) == 0 {
 		return enrich
@@ -1515,6 +1615,7 @@ func remapEnrichSelection(enrich *enrichFlagValue, logicalToDesired map[string]s
 	return &cloned
 }
 
+// resolveTransformsForSource centralizes this code path so package behavior stays consistent.
 func resolveTransformsForSource(definitions namedDefinitions, names []string, sourceIndex string) (namedDefinitions, []string, error) {
 	if len(names) == 0 {
 		return nil, nil, nil
@@ -1562,6 +1663,7 @@ func resolveTransformsForSource(definitions namedDefinitions, names []string, so
 	return selectedDefinitions, selectedNames, nil
 }
 
+// garbageCollectManagedPolicies centralizes this code path so package behavior stays consistent.
 func garbageCollectManagedPolicies(es *elasticsearch.Client, logicalNames []string, desiredSet map[string]struct{}) {
 	if len(logicalNames) == 0 {
 		return
@@ -1601,6 +1703,7 @@ func garbageCollectManagedPolicies(es *elasticsearch.Client, logicalNames []stri
 	}
 }
 
+// deletePolicyBestEffort centralizes this code path so package behavior stays consistent.
 func deletePolicyBestEffort(es *elasticsearch.Client, policy string) {
 	res, err := es.EnrichDeletePolicy(
 		policy,
@@ -1632,6 +1735,7 @@ func deletePolicyBestEffort(es *elasticsearch.Client, policy string) {
 	log.Info().Str("policy", policy).Msg("Managed policy GC deleted unreferenced policy")
 }
 
+// buildTemplateVariables centralizes this code path so package behavior stays consistent.
 func buildTemplateVariables(index string, additional map[string]string) templateVariables {
 	variables := templateVariables{
 		"INDEX": index,
@@ -1646,8 +1750,10 @@ func buildTemplateVariables(index string, additional map[string]string) template
 	return variables
 }
 
+// templateVariablePattern defines package-level state shared by related execution paths.
 var templateVariablePattern = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)`)
 
+// readTemplatedFile centralizes this code path so package behavior stays consistent.
 func readTemplatedFile(path string, variables templateVariables) ([]byte, error) {
 	content, err := os.ReadFile(path)
 	if err != nil {
@@ -1671,6 +1777,9 @@ func readTemplatedFile(path string, variables templateVariables) ([]byte, error)
 	return []byte(expanded), nil
 }
 
+// ─── Managed Resource Lifecycle ────────────────────────────────────────────────
+
+// createPipelines centralizes this code path so package behavior stays consistent.
 func createPipelines(es *elasticsearch.Client, definitions namedDefinitions, names []string) {
 	for _, name := range names {
 		res, err := es.Ingest.PutPipeline(
@@ -1695,6 +1804,7 @@ func createPipelines(es *elasticsearch.Client, definitions namedDefinitions, nam
 	}
 }
 
+// deletePipelines centralizes this code path so package behavior stays consistent.
 func deletePipelines(es *elasticsearch.Client, names []string) {
 	for _, name := range names {
 		res, err := es.Ingest.DeletePipeline(
@@ -1723,6 +1833,7 @@ func deletePipelines(es *elasticsearch.Client, names []string) {
 	}
 }
 
+// createPolicies centralizes this code path so package behavior stays consistent.
 func createPolicies(es *elasticsearch.Client, definitions namedDefinitions, names []string) {
 	for _, name := range names {
 		for attempt := 1; attempt <= 5; attempt++ {
@@ -1771,6 +1882,7 @@ func createPolicies(es *elasticsearch.Client, definitions namedDefinitions, name
 	}
 }
 
+// putPolicy centralizes this code path so package behavior stays consistent.
 func putPolicy(es *elasticsearch.Client, name string, definition json.RawMessage) (*esapi.Response, error) {
 	return es.EnrichPutPolicy(
 		name,
@@ -1783,6 +1895,7 @@ func putPolicy(es *elasticsearch.Client, name string, definition json.RawMessage
 	)
 }
 
+// deletePolicies centralizes this code path so package behavior stays consistent.
 func deletePolicies(es *elasticsearch.Client, names []string, nuke bool) {
 	for _, name := range names {
 		for attempt := 1; attempt <= 2; attempt++ {
@@ -1843,6 +1956,7 @@ func deletePolicies(es *elasticsearch.Client, names []string, nuke bool) {
 	}
 }
 
+// deleteManagedResources centralizes this code path so package behavior stays consistent.
 func deleteManagedResources(es *elasticsearch.Client, pipelineNames []string, policyNames []string, transformNames []string, nuke bool) {
 	if len(pipelineNames) > 0 {
 		deletePipelines(es, pipelineNames)
@@ -1855,6 +1969,7 @@ func deleteManagedResources(es *elasticsearch.Client, pipelineNames []string, po
 	}
 }
 
+// createOrUpdateTransforms centralizes this code path so package behavior stays consistent.
 func createOrUpdateTransforms(es *elasticsearch.Client, definitions namedDefinitions, names []string) {
 	for _, name := range names {
 		definition, ok := definitions[name]
@@ -1910,6 +2025,7 @@ func createOrUpdateTransforms(es *elasticsearch.Client, definitions namedDefinit
 	}
 }
 
+// transformExists centralizes this code path so package behavior stays consistent.
 func transformExists(es *elasticsearch.Client, name string) bool {
 	res, err := es.TransformGetTransform(
 		es.TransformGetTransform.WithContext(context.Background()),
@@ -1939,6 +2055,7 @@ func transformExists(es *elasticsearch.Client, name string) bool {
 	return true
 }
 
+// stopTransformsBestEffort centralizes this code path so package behavior stays consistent.
 func stopTransformsBestEffort(es *elasticsearch.Client, names []string) {
 	for _, name := range names {
 		res, err := es.TransformStopTransform(
@@ -1971,6 +2088,7 @@ func stopTransformsBestEffort(es *elasticsearch.Client, names []string) {
 	}
 }
 
+// deleteTransforms centralizes this code path so package behavior stays consistent.
 func deleteTransforms(es *elasticsearch.Client, names []string) {
 	for _, name := range names {
 		res, err := es.TransformDeleteTransform(
@@ -2001,6 +2119,7 @@ func deleteTransforms(es *elasticsearch.Client, names []string) {
 	}
 }
 
+// startTransforms centralizes this code path so package behavior stays consistent.
 func startTransforms(es *elasticsearch.Client, names []string) {
 	for _, name := range names {
 		res, err := es.TransformStartTransform(
@@ -2031,6 +2150,7 @@ func startTransforms(es *elasticsearch.Client, names []string) {
 	}
 }
 
+// deletePipelinesForNuke centralizes this code path so package behavior stays consistent.
 func deletePipelinesForNuke(es *elasticsearch.Client, names []string) {
 	for _, name := range names {
 		res, err := es.Ingest.DeletePipeline(
@@ -2077,6 +2197,7 @@ func deletePipelinesForNuke(es *elasticsearch.Client, names []string) {
 	}
 }
 
+// findPipelinesReferencingPolicy centralizes this code path so package behavior stays consistent.
 func findPipelinesReferencingPolicy(es *elasticsearch.Client, policy string) []string {
 	res, err := es.Ingest.GetPipeline(
 		es.Ingest.GetPipeline.WithContext(context.Background()),
@@ -2103,6 +2224,7 @@ func findPipelinesReferencingPolicy(es *elasticsearch.Client, policy string) []s
 	return pipelineNamesReferencingPolicy(definitions, policy)
 }
 
+// findIndicesUsingDefaultPipeline centralizes this code path so package behavior stays consistent.
 func findIndicesUsingDefaultPipeline(es *elasticsearch.Client, pipeline string) []string {
 	res, err := es.Indices.GetSettings(es.Indices.GetSettings.WithName("*"))
 	checkErr("getting index settings", err)
@@ -2140,6 +2262,7 @@ func findIndicesUsingDefaultPipeline(es *elasticsearch.Client, pipeline string) 
 	return indices
 }
 
+// clearDefaultPipelineForIndices centralizes this code path so package behavior stays consistent.
 func clearDefaultPipelineForIndices(es *elasticsearch.Client, indices []string) {
 	for _, index := range indices {
 		res, err := es.Indices.PutSettings(
@@ -2163,6 +2286,7 @@ func clearDefaultPipelineForIndices(es *elasticsearch.Client, indices []string) 
 	}
 }
 
+// pipelineNamesReferencingPolicy centralizes this code path so package behavior stays consistent.
 func pipelineNamesReferencingPolicy(definitions namedDefinitions, policy string) []string {
 	names := make([]string, 0)
 	for name, definition := range definitions {
@@ -2174,6 +2298,7 @@ func pipelineNamesReferencingPolicy(definitions namedDefinitions, policy string)
 	return names
 }
 
+// pipelineDefinitionReferencesPolicy centralizes this code path so package behavior stays consistent.
 func pipelineDefinitionReferencesPolicy(definition json.RawMessage, policy string) bool {
 	var parsed any
 	if err := json.Unmarshal(definition, &parsed); err != nil {
@@ -2182,6 +2307,7 @@ func pipelineDefinitionReferencesPolicy(definition json.RawMessage, policy strin
 	return valueReferencesPolicy(parsed, policy)
 }
 
+// valueReferencesPolicy centralizes this code path so package behavior stays consistent.
 func valueReferencesPolicy(value any, policy string) bool {
 	switch typed := value.(type) {
 	case map[string]any:
@@ -2205,6 +2331,9 @@ func valueReferencesPolicy(value any, policy string) bool {
 	return false
 }
 
+// ─── Enrich Execution ──────────────────────────────────────────────────────────
+
+// refreshIndex centralizes this code path so package behavior stays consistent.
 func refreshIndex(es *elasticsearch.Client, index string) {
 	res, err := es.Indices.Refresh(es.Indices.Refresh.WithIndex(index))
 	checkErr("refreshing index before enrich execution", err)
@@ -2222,6 +2351,7 @@ func refreshIndex(es *elasticsearch.Client, index string) {
 	log.Info().Str("index", index).Msg("Refreshed index before executing enrich policy")
 }
 
+// runEnrichPolicies centralizes this code path so package behavior stays consistent.
 func runEnrichPolicies(es *elasticsearch.Client, enrich *enrichFlagValue, declared []string) enrichRunSummary {
 	summary := enrichRunSummary{}
 
@@ -2278,6 +2408,7 @@ func runEnrichPolicies(es *elasticsearch.Client, enrich *enrichFlagValue, declar
 	return summary
 }
 
+// getEnrichPolicies centralizes this code path so package behavior stays consistent.
 func getEnrichPolicies(es *elasticsearch.Client) ([]string, bool) {
 	res, err := es.EnrichGetPolicy(
 		es.EnrichGetPolicy.WithContext(context.Background()),
@@ -2321,6 +2452,7 @@ func getEnrichPolicies(es *elasticsearch.Client) ([]string, bool) {
 	return policies, true
 }
 
+// resolveEnrichTargets centralizes this code path so package behavior stays consistent.
 func resolveEnrichTargets(enrich *enrichFlagValue, available []string, declared []string) ([]string, []string) {
 	if enrich == nil || !enrich.enabled {
 		return nil, nil
@@ -2362,6 +2494,7 @@ func resolveEnrichTargets(enrich *enrichFlagValue, available []string, declared 
 	return targets, missing
 }
 
+// executeEnrichPolicy centralizes this code path so package behavior stays consistent.
 func executeEnrichPolicy(es *elasticsearch.Client, policy string) bool {
 	startTime := time.Now()
 	res, err := es.EnrichExecutePolicy(
@@ -2432,6 +2565,7 @@ func executeEnrichPolicy(es *elasticsearch.Client, policy string) bool {
 	return !isFailure
 }
 
+// isUnsupportedEnrichAPI centralizes this code path so package behavior stays consistent.
 func isUnsupportedEnrichAPI(statusCode int, body []byte) bool {
 	if statusCode != http.StatusNotFound {
 		return false
@@ -2444,18 +2578,22 @@ func isUnsupportedEnrichAPI(statusCode int, body []byte) bool {
 	return !bytes.Contains(body, []byte("resource_not_found_exception"))
 }
 
+// hasElasticsearchErrorType centralizes this code path so package behavior stays consistent.
 func hasElasticsearchErrorType(body []byte, errorType string) bool {
 	return bytes.Contains(body, []byte(`"type":"`+errorType+`"`))
 }
 
+// policyDeleteBlockedByPipelineReference centralizes this code path so package behavior stays consistent.
 func policyDeleteBlockedByPipelineReference(body []byte) bool {
 	return bytes.Contains(body, []byte("pipeline is referencing it"))
 }
 
+// pipelineDeleteBlockedByDefaultIndex centralizes this code path so package behavior stays consistent.
 func pipelineDeleteBlockedByDefaultIndex(body []byte) bool {
 	return bytes.Contains(body, []byte("cannot be deleted because it is the default pipeline"))
 }
 
+// transformStopAlreadyStopped centralizes this code path so package behavior stays consistent.
 func transformStopAlreadyStopped(statusCode int, body []byte) bool {
 	if statusCode != http.StatusConflict && statusCode != http.StatusBadRequest {
 		return false
@@ -2464,6 +2602,7 @@ func transformStopAlreadyStopped(statusCode int, body []byte) bool {
 	return strings.Contains(lowered, "cannot stop transform") && strings.Contains(lowered, "stopped")
 }
 
+// transformStartAlreadyStarted centralizes this code path so package behavior stays consistent.
 func transformStartAlreadyStarted(statusCode int, body []byte) bool {
 	if statusCode != http.StatusConflict && statusCode != http.StatusBadRequest {
 		return false
@@ -2474,6 +2613,8 @@ func transformStartAlreadyStarted(statusCode int, body []byte) bool {
 	}
 	return strings.Contains(lowered, "already started") || (strings.Contains(lowered, "cannot start transform") && strings.Contains(lowered, "started"))
 }
+
+// ─── Bulk Insert ───────────────────────────────────────────────────────────────
 
 // bulkInsert handles a batch of documents and validates per-item bulk response status.
 func bulkInsert(es *elasticsearch.Client, index string, batch []map[string]interface{}, inserted, total int, idField string) bulkInsertResult {
