@@ -1,13 +1,17 @@
 package loader
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"os"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 )
 
 func TestEnrichFlagValueBareFlagRunsAllPolicies(t *testing.T) {
@@ -113,6 +117,37 @@ func TestParseLogLevel(t *testing.T) {
 				t.Fatalf("parseLogLevel mismatch: got %v want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestRunWarningLogIncludesTimestamp(t *testing.T) {
+	previousLogger := log.Logger
+	previousLevel := zerolog.GlobalLevel()
+	t.Cleanup(func() {
+		log.Logger = previousLogger
+		zerolog.SetGlobalLevel(previousLevel)
+	})
+
+	var output bytes.Buffer
+	log.Logger = zerolog.New(zerolog.ConsoleWriter{Out: &output})
+	zerolog.SetGlobalLevel(zerolog.TraceLevel)
+
+	_, err := Run(context.Background(), Options{
+		URL:      "http://127.0.0.1:1",
+		Index:    "cards",
+		KeepLast: 1,
+		Nuke:     true,
+	})
+	if err == nil {
+		t.Fatal("expected Run to fail for unreachable Elasticsearch")
+	}
+
+	logs := output.String()
+	if !strings.Contains(logs, "Ignoring -keep-last because -alias is not enabled") {
+		t.Fatalf("expected keep-last warning in logs, got: %s", logs)
+	}
+	if strings.Contains(logs, "<nil>") {
+		t.Fatalf("expected timestamped log output without <nil>, got: %s", logs)
 	}
 }
 

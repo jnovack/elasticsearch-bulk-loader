@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"runtime/debug"
 	"strings"
@@ -127,6 +128,10 @@ func parseLogLevel(level string) (zerolog.Level, error) {
 	}
 }
 
+func newConsoleLogger(out io.Writer) zerolog.Logger {
+	return zerolog.New(zerolog.ConsoleWriter{Out: out}).With().Timestamp().Logger()
+}
+
 func main() {
 	populateBuildMetadataFromBuildInfo()
 
@@ -166,7 +171,7 @@ func main() {
 		os.Exit(1)
 	}
 	zerolog.SetGlobalLevel(parsedLogLevel)
-	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
+	log.Logger = newConsoleLogger(os.Stderr)
 
 	if *showVersion {
 		log.Info().

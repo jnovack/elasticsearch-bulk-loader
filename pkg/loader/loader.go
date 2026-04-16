@@ -336,8 +336,17 @@ func (f *fatalEvent) Msgf(format string, args ...any) {
 	f.panicWithMessage(fmt.Sprintf(format, args...))
 }
 
+func withTimestampLogger(base zerolog.Logger) zerolog.Logger {
+	return base.With().Timestamp().Logger()
+}
+
 func Run(ctx context.Context, opts Options) (result Result, err error) {
 	_ = ctx
+	previousLogger := log.Logger
+	log.Logger = withTimestampLogger(log.Logger)
+	defer func() {
+		log.Logger = previousLogger
+	}()
 
 	url := &opts.URL
 	insecure := &opts.InsecureSkipVerify
