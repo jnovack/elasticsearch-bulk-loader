@@ -142,12 +142,13 @@ func main() {
 	mappingsFile := flag.String("mappings", "", "Path to index mappings JSON file (optional)")
 	pipelinesFile := flag.String("pipelines", "", "Path to JSON file containing one or more ingest pipeline definitions (optional)")
 	policiesFile := flag.String("policies", "", "Path to JSON file containing one or more enrich policy definitions (optional)")
+	transformsFile := flag.String("transforms", "", "Path to JSON file containing one or more transform definitions (optional)")
 	dataFile := flag.String("data", "", "Path to bulk JSON data file (array of objects)")
 	batchSize := flag.Int("batch", 1000, "Batch size for bulk inserts")
 	deleteIndex := flag.Bool("delete", false, "Delete index if it exists")
 	addToIndex := flag.Bool("add", false, "Add documents to existing index")
 	flushIndex := flag.Bool("flush", false, "Delete all documents from an existing index without deleting the index")
-	syncManaged := flag.Bool("sync-managed", false, "Create or update declared ingest pipelines and enrich policies")
+	syncManaged := flag.Bool("sync-managed", false, "Create or update declared ingest pipelines, enrich policies, and transforms")
 	aliasMode := flag.Bool("alias", false, "Treat -index as an alias; create timestamped indices as <alias>-YYYYMMDDHHMMSS and repoint the alias on recreate")
 	keepLast := flag.Int("keep-last", 0, "When -alias is set, keep only the newest N timestamped indices matching <alias>-YYYYMMDDHHMMSS (0 disables pruning)")
 	nuke := flag.Bool("nuke", false, "Delete the current index and declared managed resources, including dependent pipelines that reference declared enrich policies")
@@ -196,6 +197,7 @@ func main() {
 		MappingsFile:       *mappingsFile,
 		PipelinesFile:      *pipelinesFile,
 		PoliciesFile:       *policiesFile,
+		TransformsFile:     *transformsFile,
 		DataFile:           *dataFile,
 		BatchSize:          *batchSize,
 		DeleteIndex:        *deleteIndex,

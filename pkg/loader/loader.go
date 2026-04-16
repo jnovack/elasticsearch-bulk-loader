@@ -85,6 +85,7 @@ type Options struct {
 	MappingsFile       string
 	PipelinesFile      string
 	PoliciesFile       string
+	TransformsFile     string
 	DataFile           string
 	BatchSize          int
 	DeleteIndex        bool
@@ -98,6 +99,7 @@ type Options struct {
 	User               string
 	Pass               string
 	APIKey             string
+	TemplateVariables  map[string]string
 	Enrich             EnrichOptions
 }
 
@@ -179,6 +181,11 @@ type managedPolicyPlan struct {
 	Definitions      namedDefinitions
 	LogicalToDesired map[string]string
 	DesiredSet       map[string]struct{}
+}
+
+type transformDefinition struct {
+	SourceIndex string          `json:"source_index"`
+	Body        json.RawMessage `json:"body"`
 }
 
 type enrichRunSummary struct {
@@ -269,7 +276,7 @@ func classifyRunErrorKind(op string) error {
 		return ErrBulkFailure
 	case strings.Contains(lowered, "enrich"):
 		return ErrEnrichExecution
-	case strings.Contains(lowered, "pipeline"), strings.Contains(lowered, "policy"), strings.Contains(lowered, "managed"):
+	case strings.Contains(lowered, "pipeline"), strings.Contains(lowered, "policy"), strings.Contains(lowered, "transform"), strings.Contains(lowered, "managed"):
 		return ErrManagedResource
 	case strings.Contains(lowered, "index"), strings.Contains(lowered, "alias"):
 		return ErrIndexOperation
@@ -355,6 +362,7 @@ func Run(ctx context.Context, opts Options) (result Result, err error) {
 	mappingsFile := &opts.MappingsFile
 	pipelinesFile := &opts.PipelinesFile
 	policiesFile := &opts.PoliciesFile
+	transformsFile := &opts.TransformsFile
 	dataFile := &opts.DataFile
 	batchSize := &opts.BatchSize
 	deleteIndex := &opts.DeleteIndex
@@ -368,6 +376,7 @@ func Run(ctx context.Context, opts Options) (result Result, err error) {
 	user := &opts.User
 	pass := &opts.Pass
 	apiKey := &opts.APIKey
+	templateVariables := &opts.TemplateVariables
 	enrich := enrichFromOptions(opts.Enrich)
 
 	if *url == "" {
@@ -429,6 +438,9 @@ func Run(ctx context.Context, opts Options) (result Result, err error) {
 	if *aliasMode && action == dataActionDelete && *keepLast == 0 {
 		warn("Alias delete detected without -keep-last; no old timestamped indices will be deleted and storage usage can grow over time.")
 	}
+	if strings.TrimSpace(*transformsFile) != "" && !effectiveSyncManaged {
+		warn("Ignoring -transforms because -sync-managed is not enabled")
+	}
 
 	cfg := elasticsearch.Config{
 		Addresses: []string{*url},
@@ -449,9 +461,10 @@ func Run(ctx context.Context, opts Options) (result Result, err error) {
 	es, err := elasticsearch.NewClient(cfg)
 	checkErr("creating Elasticsearch client", err)
 
-	variables := buildTemplateVariables(*index)
+	variables := buildTemplateVariables(*index, *templateVariables)
 	pipelineDefinitions, pipelineNames := readNamedDefinitions(*pipelinesFile, "pipeline", variables)
 	logicalPolicyDefinitions, logicalPolicyNames := readNamedDefinitions(*policiesFile, "policy", variables)
+	logicalTransformDefinitions, logicalTransformNames := readNamedDefinitions(*transformsFile, "transform", variables)
 	policyPlan := buildManagedPolicyPlan(logicalPolicyDefinitions, logicalPolicyNames)
 	policyNameMapping := make(map[string]string, len(policyPlan.LogicalToDesired))
 	for logical, desired := range policyPlan.LogicalToDesired {
@@ -462,6 +475,10 @@ func Run(ctx context.Context, opts Options) (result Result, err error) {
 	policyDefinitions := policyPlan.Definitions
 	policyNames := policyPlan.DesiredNames
 	policyDeleteNames := resolveManagedPolicyDeleteNames(es, policyPlan.LogicalNames)
+	transformDefinitions, transformNames, transformErr := resolveTransformsForSource(logicalTransformDefinitions, logicalTransformNames, *index)
+	if transformErr != nil {
+		fatal().Err(transformErr).Msg("Failed to resolve transform definitions")
+	}
 	enrichSelection := remapEnrichSelection(enrich, policyNameMapping)
 	defaultPipeline := ""
 	if effectiveSyncManaged && len(pipelineNames) > 0 {
@@ -521,7 +538,7 @@ func Run(ctx context.Context, opts Options) (result Result, err error) {
 			}
 		}
 
-		deleteManagedResources(es, pipelineNames, policyDeleteNames, true)
+		deleteManagedResources(es, pipelineNames, policyDeleteNames, transformNames, true)
 	}
 
 	switch action {
@@ -544,9 +561,9 @@ func Run(ctx context.Context, opts Options) (result Result, err error) {
 		}
 
 		if *aliasMode {
-			log.Info().Str("alias", *index).Msg("Alias mode delete keeps existing managed resources; use -nuke for destructive managed-resource cleanup")
+			log.Info().Str("alias", *index).Msg("Alias mode delete keeps existing managed resources (pipelines, policies, transforms); use -nuke for destructive managed-resource cleanup")
 		} else {
-			deleteManagedResources(es, pipelineNames, policyDeleteNames, false)
+			deleteManagedResources(es, pipelineNames, policyDeleteNames, transformNames, false)
 		}
 	case dataActionFlush:
 		if *aliasMode {
@@ -586,7 +603,7 @@ func Run(ctx context.Context, opts Options) (result Result, err error) {
 		}
 	}
 
-	shouldCreateIndex := action.requiresDataFile() && !exists
+	shouldCreateIndex := !exists && (action.requiresDataFile() || (effectiveSyncManaged && (*settingsFile != "" || *mappingsFile != "")))
 	writeIndex := *index
 	createdIndex := ""
 	if *aliasMode && shouldCreateIndex {
@@ -631,9 +648,15 @@ func Run(ctx context.Context, opts Options) (result Result, err error) {
 	}
 
 	deferPolicyCreationUntilAliasSwap := effectiveSyncManaged && *aliasMode && shouldCreateIndex
+	transformStartNames := make([]string, 0)
 	if effectiveSyncManaged && exists {
 		if !shouldCreateIndex {
 			createPipelines(es, pipelineDefinitions, pipelineNames)
+		}
+		if len(transformNames) > 0 {
+			stopTransformsBestEffort(es, transformNames)
+			createOrUpdateTransforms(es, transformDefinitions, transformNames)
+			transformStartNames = append(transformStartNames, transformNames...)
 		}
 		if !deferPolicyCreationUntilAliasSwap {
 			createPolicies(es, policyDefinitions, policyNames)
@@ -735,6 +758,9 @@ func Run(ctx context.Context, opts Options) (result Result, err error) {
 		result.EnrichMissing = enrichResult.Missing
 		result.EnrichSucceeded = enrichResult.Succeeded
 		result.EnrichFailed = enrichResult.Failed
+	}
+	if len(transformStartNames) > 0 {
+		startTransforms(es, transformStartNames)
 	}
 
 	return result, nil
@@ -1489,6 +1515,53 @@ func remapEnrichSelection(enrich *enrichFlagValue, logicalToDesired map[string]s
 	return &cloned
 }
 
+func resolveTransformsForSource(definitions namedDefinitions, names []string, sourceIndex string) (namedDefinitions, []string, error) {
+	if len(names) == 0 {
+		return nil, nil, nil
+	}
+
+	trimmedSourceIndex := strings.TrimSpace(sourceIndex)
+	if trimmedSourceIndex == "" {
+		return nil, nil, fmt.Errorf("source index is required")
+	}
+
+	selectedDefinitions := make(namedDefinitions)
+	selectedNames := make([]string, 0)
+	for _, name := range names {
+		rawDefinition, ok := definitions[name]
+		if !ok {
+			return nil, nil, fmt.Errorf("transform %q definition missing from parsed transforms file", name)
+		}
+
+		var parsed transformDefinition
+		if err := json.Unmarshal(rawDefinition, &parsed); err != nil {
+			return nil, nil, fmt.Errorf("transform %q definition invalid: %w", name, err)
+		}
+
+		if strings.TrimSpace(parsed.SourceIndex) == "" {
+			return nil, nil, fmt.Errorf("transform %q requires non-empty source_index", name)
+		}
+		trimmedBody := bytes.TrimSpace(parsed.Body)
+		if len(trimmedBody) == 0 || bytes.Equal(trimmedBody, []byte("null")) {
+			return nil, nil, fmt.Errorf("transform %q requires non-empty body", name)
+		}
+
+		if strings.TrimSpace(parsed.SourceIndex) != trimmedSourceIndex {
+			log.Trace().
+				Str("transform", name).
+				Str("source_index", parsed.SourceIndex).
+				Str("index", trimmedSourceIndex).
+				Msg("Skipping transform that targets a different source index")
+			continue
+		}
+
+		selectedDefinitions[name] = trimmedBody
+		selectedNames = append(selectedNames, name)
+	}
+
+	return selectedDefinitions, selectedNames, nil
+}
+
 func garbageCollectManagedPolicies(es *elasticsearch.Client, logicalNames []string, desiredSet map[string]struct{}) {
 	if len(logicalNames) == 0 {
 		return
@@ -1559,10 +1632,18 @@ func deletePolicyBestEffort(es *elasticsearch.Client, policy string) {
 	log.Info().Str("policy", policy).Msg("Managed policy GC deleted unreferenced policy")
 }
 
-func buildTemplateVariables(index string) templateVariables {
-	return templateVariables{
+func buildTemplateVariables(index string, additional map[string]string) templateVariables {
+	variables := templateVariables{
 		"INDEX": index,
 	}
+	for key, value := range additional {
+		trimmedKey := strings.TrimSpace(key)
+		if trimmedKey == "" {
+			continue
+		}
+		variables[trimmedKey] = value
+	}
+	return variables
 }
 
 var templateVariablePattern = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)`)
@@ -1762,12 +1843,191 @@ func deletePolicies(es *elasticsearch.Client, names []string, nuke bool) {
 	}
 }
 
-func deleteManagedResources(es *elasticsearch.Client, pipelineNames []string, policyNames []string, nuke bool) {
+func deleteManagedResources(es *elasticsearch.Client, pipelineNames []string, policyNames []string, transformNames []string, nuke bool) {
 	if len(pipelineNames) > 0 {
 		deletePipelines(es, pipelineNames)
 	}
 	if len(policyNames) > 0 {
 		deletePolicies(es, policyNames, nuke)
+	}
+	if len(transformNames) > 0 {
+		deleteTransforms(es, transformNames)
+	}
+}
+
+func createOrUpdateTransforms(es *elasticsearch.Client, definitions namedDefinitions, names []string) {
+	for _, name := range names {
+		definition, ok := definitions[name]
+		if !ok {
+			fatal().Str("transform", name).Msg("Transform definition missing from parsed transform file")
+		}
+
+		exists := transformExists(es, name)
+		if exists {
+			res, err := es.TransformUpdateTransform(
+				strings.NewReader(string(definition)),
+				name,
+				es.TransformUpdateTransform.WithContext(context.Background()),
+				es.TransformUpdateTransform.WithHeader(map[string]string{
+					"Content-Type": "application/json",
+					"Accept":       "application/json",
+				}),
+			)
+			checkErr("updating transform", err)
+			body, _ := io.ReadAll(res.Body)
+			res.Body.Close()
+			if res.IsError() {
+				fatal().
+					Str("transform", name).
+					Int("status_code", res.StatusCode).
+					Str("body", string(body)).
+					Msg("Failed to update transform")
+			}
+			log.Info().Str("transform", name).Msg("Transform updated")
+			continue
+		}
+
+		res, err := es.TransformPutTransform(
+			strings.NewReader(string(definition)),
+			name,
+			es.TransformPutTransform.WithContext(context.Background()),
+			es.TransformPutTransform.WithHeader(map[string]string{
+				"Content-Type": "application/json",
+				"Accept":       "application/json",
+			}),
+		)
+		checkErr("creating transform", err)
+		body, _ := io.ReadAll(res.Body)
+		res.Body.Close()
+		if res.IsError() {
+			fatal().
+				Str("transform", name).
+				Int("status_code", res.StatusCode).
+				Str("body", string(body)).
+				Msg("Failed to create transform")
+		}
+		log.Info().Str("transform", name).Msg("Transform created")
+	}
+}
+
+func transformExists(es *elasticsearch.Client, name string) bool {
+	res, err := es.TransformGetTransform(
+		es.TransformGetTransform.WithContext(context.Background()),
+		es.TransformGetTransform.WithTransformID(name),
+		es.TransformGetTransform.WithAllowNoMatch(true),
+	)
+	checkErr("checking if transform exists", err)
+	body, _ := io.ReadAll(res.Body)
+	res.Body.Close()
+
+	if res.StatusCode == http.StatusNotFound {
+		return false
+	}
+	if res.IsError() {
+		fatal().
+			Str("transform", name).
+			Int("status_code", res.StatusCode).
+			Str("body", string(body)).
+			Msg("Failed to check transform existence")
+	}
+	var parsed struct {
+		Count int `json:"count"`
+	}
+	if err := json.Unmarshal(body, &parsed); err == nil {
+		return parsed.Count > 0
+	}
+	return true
+}
+
+func stopTransformsBestEffort(es *elasticsearch.Client, names []string) {
+	for _, name := range names {
+		res, err := es.TransformStopTransform(
+			name,
+			es.TransformStopTransform.WithContext(context.Background()),
+			es.TransformStopTransform.WithForce(true),
+			es.TransformStopTransform.WithWaitForCompletion(true),
+			es.TransformStopTransform.WithTimeout(30*time.Second),
+			es.TransformStopTransform.WithAllowNoMatch(true),
+			es.TransformStopTransform.WithHeader(map[string]string{
+				"Accept": "application/json",
+			}),
+		)
+		checkErr("stopping transform", err)
+		body, _ := io.ReadAll(res.Body)
+		res.Body.Close()
+
+		if res.StatusCode == http.StatusNotFound || transformStopAlreadyStopped(res.StatusCode, body) {
+			log.Debug().Str("transform", name).Msg("Transform is not running. Nothing to stop.")
+			continue
+		}
+		if res.IsError() {
+			fatal().
+				Str("transform", name).
+				Int("status_code", res.StatusCode).
+				Str("body", string(body)).
+				Msg("Failed to stop transform")
+		}
+		log.Debug().Str("transform", name).Msg("Transform stopped")
+	}
+}
+
+func deleteTransforms(es *elasticsearch.Client, names []string) {
+	for _, name := range names {
+		res, err := es.TransformDeleteTransform(
+			name,
+			es.TransformDeleteTransform.WithContext(context.Background()),
+			es.TransformDeleteTransform.WithForce(true),
+			es.TransformDeleteTransform.WithDeleteDestIndex(false),
+			es.TransformDeleteTransform.WithHeader(map[string]string{
+				"Accept": "application/json",
+			}),
+		)
+		checkErr("deleting transform", err)
+		body, _ := io.ReadAll(res.Body)
+		res.Body.Close()
+
+		if res.StatusCode == http.StatusNotFound {
+			log.Debug().Str("transform", name).Msg("Transform does not exist. Nothing to delete.")
+			continue
+		}
+		if res.IsError() {
+			fatal().
+				Str("transform", name).
+				Int("status_code", res.StatusCode).
+				Str("body", string(body)).
+				Msg("Failed to delete transform")
+		}
+		log.Info().Str("transform", name).Msg("Transform deleted")
+	}
+}
+
+func startTransforms(es *elasticsearch.Client, names []string) {
+	for _, name := range names {
+		res, err := es.TransformStartTransform(
+			name,
+			es.TransformStartTransform.WithContext(context.Background()),
+			es.TransformStartTransform.WithTimeout(30*time.Second),
+			es.TransformStartTransform.WithHeader(map[string]string{
+				"Accept": "application/json",
+			}),
+		)
+		checkErr("starting transform", err)
+		body, _ := io.ReadAll(res.Body)
+		res.Body.Close()
+
+		if transformStartAlreadyStarted(res.StatusCode, body) {
+			log.Info().Str("transform", name).Msg("Transform already running")
+			continue
+		}
+		if res.IsError() {
+			fatal().
+				Str("transform", name).
+				Int("status_code", res.StatusCode).
+				Str("body", string(body)).
+				Msg("Failed to start transform")
+		}
+
+		log.Info().Str("transform", name).Msg("Transform started")
 	}
 }
 
@@ -2194,6 +2454,25 @@ func policyDeleteBlockedByPipelineReference(body []byte) bool {
 
 func pipelineDeleteBlockedByDefaultIndex(body []byte) bool {
 	return bytes.Contains(body, []byte("cannot be deleted because it is the default pipeline"))
+}
+
+func transformStopAlreadyStopped(statusCode int, body []byte) bool {
+	if statusCode != http.StatusConflict && statusCode != http.StatusBadRequest {
+		return false
+	}
+	lowered := strings.ToLower(string(body))
+	return strings.Contains(lowered, "cannot stop transform") && strings.Contains(lowered, "stopped")
+}
+
+func transformStartAlreadyStarted(statusCode int, body []byte) bool {
+	if statusCode != http.StatusConflict && statusCode != http.StatusBadRequest {
+		return false
+	}
+	lowered := strings.ToLower(string(body))
+	if strings.Contains(lowered, "resource_already_exists_exception") {
+		return true
+	}
+	return strings.Contains(lowered, "already started") || (strings.Contains(lowered, "cannot start transform") && strings.Contains(lowered, "started"))
 }
 
 // bulkInsert handles a batch of documents and validates per-item bulk response status.

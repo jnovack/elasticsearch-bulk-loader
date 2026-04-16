@@ -2,17 +2,18 @@
 
 A Go CLI for end-to-end loading of JSON documents into Elasticsearch-compatible clusters.
 
-`es-bulk-loader` can manage index creation, settings, mappings, ingest pipelines, enrich policies,
+`es-bulk-loader` can manage index creation, settings, mappings, ingest pipelines, enrich policies, transforms,
 document loading, and optional enrich execution as one repeatable CLI or CI workflow.
 
 ## Features
 
 - Full index lifecycle support: create, replace data, rebuild, and destructive cleanup
-- Managed Elasticsearch resources: settings, mappings, ingest pipelines, and enrich policies
+- Managed Elasticsearch resources: settings, mappings, ingest pipelines, enrich policies, and transforms
 - Keyed JSON definitions for multiple pipelines or policies in a single file
 - Automatic default-pipeline selection from the first declared pipeline when settings leave it unset
 - Bulk JSON loading with configurable batch sizes and optional `_id` override
 - Enrich execution after load, including source-index refresh before policy execution
+- Transform upsert/start lifecycle with source-index filtering from config
 - Practical input normalization for wrapped settings, nested `index` settings, and `index.*` keys
 - Safe-by-default policy deletion, with an explicit destructive override for dependent pipeline cleanup
 - Graceful handling for clusters that do not expose enrich APIs
@@ -163,7 +164,7 @@ The loader now separates three concerns:
 
 1. `-nuke` removes the current index and declared managed resources first.
 2. One optional data action, exactly one of `-add`, `-flush`, or `-delete`, controls how documents are handled.
-3. `-sync-managed` independently creates or updates declared pipelines and policies.
+3. `-sync-managed` independently creates or updates declared pipelines, policies, and transforms.
 
 When combined, the execution order is:
 
@@ -173,6 +174,7 @@ When combined, the execution order is:
 4. Run `-sync-managed`, if requested.
 5. Bulk load data, if a data action was selected.
 6. Refresh the source index and execute enrich policies when `-enrich` is requested.
+7. Start selected transforms after enrich execution (or immediately after load when enrich is disabled).
 
 That ordering matters. The loader is intentionally opinionated so CI runs and operator workflows stay predictable.
 
@@ -193,12 +195,13 @@ or from the command-line.
 | `-mappings` | Optional path to JSON file with index mappings |
 | `-pipelines` | Optional path to JSON file with one or more ingest pipeline definitions |
 | `-policies` | Optional path to JSON file with one or more enrich policy definitions |
+| `-transforms` | Optional path to JSON file with one or more transform definitions |
 | `-batch` | Number of documents per bulk insert (default: 1000) |
 | `-add` | Append data to an existing index or create the index first if it does not exist |
 | `-flush` | Delete all documents from an existing index without deleting the index, then load replacement data |
 | `-delete` | Recreate data target before loading data: deletes concrete index in normal mode; rolls alias to a new timestamped index in `-alias` mode |
 | `-data` | Path to JSON array of documents to load (**required with** `-add`, `-flush`, or `-delete`) |
-| `-sync-managed` | Create or update declared ingest pipelines and enrich policies |
+| `-sync-managed` | Create or update declared ingest pipelines, enrich policies, and transforms |
 | `-nuke` | Delete the current index and declared managed resources first, including dependent pipelines that reference declared enrich policies |
 | `-id` | Field to use in the document to override _id (default: not set) |
 | `-enrich` | Run enrich policies after the bulk insert; omit value for all or pass a comma-separated list |
@@ -216,16 +219,16 @@ or from the command-line.
 | `-add` | Append data to an existing index, or create the index and load data if it does not exist |
 | `-flush` | Remove existing documents, keep the existing index structure, then load replacement data |
 | `-delete` | Recreate data target and reload data: concrete index is deleted/recreated in normal mode; alias mode creates a new timestamped index and repoints alias |
-| `-sync-managed` | Create or update declared pipelines and policies without changing document data by itself |
+| `-sync-managed` | Create or update declared pipelines, policies, and transforms without changing document data by itself |
 | `-nuke` | Remove the current index and declared managed resources first; if combined with another action, that action runs afterward |
 | `-alias` | Treat `-index` as an alias and use timestamped concrete index names (`<alias>-YYYYMMDDHHMMSS`) when a new index is created |
 | `-keep-last` | With `-alias`, prune older timestamped concrete indices after the run and keep only the newest N by parsed timestamp suffix |
 
 Common combinations:
 
-- `-add -sync-managed`: append documents and ensure declared pipelines and policies exist
-- `-flush -sync-managed`: replace documents, keep settings and mappings, and ensure declared pipelines and policies exist
-- `-delete -sync-managed`: rebuild the index from scratch and recreate declared pipelines and policies
+- `-add -sync-managed`: append documents and ensure declared pipelines, policies, and transforms exist
+- `-flush -sync-managed`: replace documents, keep settings and mappings, and ensure declared pipelines, policies, and transforms exist
+- `-delete -sync-managed`: rebuild the index from scratch and recreate declared pipelines, policies, and transforms
 - `-nuke -delete -sync-managed`: force a full teardown first, then rebuild cleanly
 - `-nuke`: remove the current index and declared managed resources without loading new data
 - `-delete -alias -keep-last 2`: roll to a new timestamped index, repoint alias, then keep only the newest two generations
@@ -249,7 +252,7 @@ Data-action behavior in alias mode:
 - `-add`: append to current alias target index; if the alias has no index yet, create a first timestamped index and load data
 
 `-keep-last` only applies when `-alias` is enabled. It parses and sorts timestamped concrete index names, then deletes older ones so only the newest N remain.
-In alias mode, `-delete` keeps existing managed resources (pipelines/policies) and relies on `-sync-managed` to upsert definitions; use `-nuke` when you want destructive managed-resource cleanup.
+In alias mode, `-delete` keeps existing managed resources (pipelines/policies/transforms) and relies on `-sync-managed` to upsert definitions; use `-nuke` when you want destructive managed-resource cleanup.
 If `-delete -alias` is run without `-sync-managed`, the loader logs a warning and assumes `-sync-managed` for that run. Add `-sync-managed` explicitly in automation for clarity.
 If `-delete -alias` is run without `-keep-last`, the loader logs a warning that no old generations were deleted and storage use can grow over time.
 
@@ -265,14 +268,14 @@ Use `-enrich` after a bulk load when enrich policy backing indices need to be re
 
 When `-pipelines` and `-policies` are supplied, the loader imports those definitions as part of the run:
 
-- `-sync-managed` creates pipelines and attempts to create declared enrich policies, refreshing when necessary.
+- `-sync-managed` creates pipelines, attempts to create declared enrich policies, and upserts matching transforms.
 - Declared enrich policies are managed by content hash during `-sync-managed`: each logical policy key is resolved to `<logical>-<sha256[:6]>`.
 - If a policy definition is unchanged, the same managed policy name is reused.
 - If a policy definition changes, a new managed policy name is created and pipelines are rewritten to reference it.
 - Old managed policy versions are garbage-collected when they are unreferenced by any pipeline.
 - `-delete` fails loudly if a declared enrich policy is still referenced by another ingest pipeline. This is the safe default because those references may belong to another index workflow.
 - `-nuke` keeps deleting through that conflict by finding and deleting ingest pipelines that reference the declared enrich policy. If one of those pipelines is still configured as `index.default_pipeline` on another index, the loader clears that setting on the dependent index before retrying the pipeline delete.
-- `-add` and `-flush` affect documents only. They do not modify pipelines or policies unless `-sync-managed` is also set.
+- `-add` and `-flush` affect documents only. They do not modify pipelines, policies, or transforms unless `-sync-managed` is also set.
 
 > [!CAUTION]
 > Use `-nuke` carefully. Unlike the normal one-index workflow, it can remove ingest pipelines outside the current index's declared pipeline file and clear `index.default_pipeline` on dependent indices if those pipelines reference a declared enrich policy you are deleting.
@@ -301,6 +304,18 @@ go run cmd/es-bulk-loader/main.go \
 
 Unknown policy names are logged as warnings and skipped. When a policy file is provided, explicit logical policy names are mapped to the resolved managed policy names automatically.
 If the cluster does not expose the enrich APIs at all, the loader logs a warning and skips enrich policy create/delete/execute operations instead of aborting the whole load.
+
+## Transforms
+
+When `-transforms` is provided, definitions are read from a keyed JSON object:
+
+- JSON key: transform ID.
+- `source_index`: logical source index name that must match the current `-index`.
+- `body`: native Elasticsearch transform definition passed directly to the transform APIs.
+
+Only transforms whose `source_index` matches the current `-index` are selected for the run.
+During `-sync-managed`, selected transforms are stopped, upserted, and then started after enrich execution (or after load when enrich is disabled).
+During `-nuke`, selected transforms are force-deleted.
 
 Definition file formats are documented in [docs/PIPELINES.md](docs/PIPELINES.md) and [docs/POLICIES.md](docs/POLICIES.md).
 

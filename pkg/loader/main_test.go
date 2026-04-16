@@ -4,9 +4,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -187,7 +191,7 @@ func TestBuildCreateIndexBodySupportsWrappedAndRawSections(t *testing.T) {
 	wrappedSettings := writeTempJSON(t, tempDir, `{"settings":{"index.default_pipeline":"wrapped-pipeline"}}`)
 	rawMappings := writeTempJSON(t, tempDir, `{"properties":{"lookup_id":{"type":"keyword"}}}`)
 
-	body := buildCreateIndexBody(wrappedSettings, rawMappings, "ignored-default", buildTemplateVariables("runtime-index"))
+	body := buildCreateIndexBody(wrappedSettings, rawMappings, "ignored-default", buildTemplateVariables("runtime-index", nil))
 
 	var parsed map[string]json.RawMessage
 	if err := json.Unmarshal([]byte(body), &parsed); err != nil {
@@ -233,7 +237,7 @@ func TestReadNamedDefinitionsExpandsIndexVariable(t *testing.T) {
 	tempDir := t.TempDir()
 	path := writeTempJSON(t, tempDir, `{"policy-a":{"match":{"indices":"${INDEX}"}}}`)
 
-	definitions, names := readNamedDefinitions(path, "policy", buildTemplateVariables("runtime-index"))
+	definitions, names := readNamedDefinitions(path, "policy", buildTemplateVariables("runtime-index", nil))
 
 	if want := []string{"policy-a"}; !reflect.DeepEqual(names, want) {
 		t.Fatalf("names mismatch: got %v want %v", names, want)
@@ -254,13 +258,201 @@ func TestReadTemplatedFileLeavesUnknownVariablesUntouched(t *testing.T) {
 	tempDir := t.TempDir()
 	path := writeTempJSON(t, tempDir, `{"value":"${UNKNOWN_VAR}"}`)
 
-	content, err := readTemplatedFile(path, buildTemplateVariables("runtime-index"))
+	content, err := readTemplatedFile(path, buildTemplateVariables("runtime-index", nil))
 	if err != nil {
 		t.Fatalf("readTemplatedFile returned error: %v", err)
 	}
 
 	if got := string(content); got != `{"value":"${UNKNOWN_VAR}"}` {
 		t.Fatalf("content mismatch: got %q want %q", got, `{"value":"${UNKNOWN_VAR}"}`)
+	}
+}
+
+func TestBuildTemplateVariablesIncludesAdditionalValues(t *testing.T) {
+	t.Parallel()
+
+	variables := buildTemplateVariables("collection-index", map[string]string{
+		"BINDER_INDEX": "binder-index",
+	})
+
+	if got := variables["INDEX"]; got != "collection-index" {
+		t.Fatalf("INDEX variable mismatch: got %q want %q", got, "collection-index")
+	}
+	if got := variables["BINDER_INDEX"]; got != "binder-index" {
+		t.Fatalf("BINDER_INDEX variable mismatch: got %q want %q", got, "binder-index")
+	}
+}
+
+func TestResolveTransformsForSourceFiltersBySourceIndex(t *testing.T) {
+	t.Parallel()
+
+	definitions := namedDefinitions{
+		"collection-to-binder": json.RawMessage(`{
+			"source_index": "collection",
+			"body": {"source":{"index":"collection"},"dest":{"index":"binder"}}
+		}`),
+		"cards-to-something": json.RawMessage(`{
+			"source_index": "cards",
+			"body": {"source":{"index":"cards"},"dest":{"index":"other"}}
+		}`),
+	}
+	names := []string{"collection-to-binder", "cards-to-something"}
+
+	selectedDefinitions, selectedNames, err := resolveTransformsForSource(definitions, names, "collection")
+	if err != nil {
+		t.Fatalf("resolveTransformsForSource returned error: %v", err)
+	}
+
+	if want := []string{"collection-to-binder"}; !reflect.DeepEqual(selectedNames, want) {
+		t.Fatalf("selected names mismatch: got %v want %v", selectedNames, want)
+	}
+	if _, ok := selectedDefinitions["collection-to-binder"]; !ok {
+		t.Fatal("expected selected transform definition to be present")
+	}
+	if _, ok := selectedDefinitions["cards-to-something"]; ok {
+		t.Fatal("did not expect non-matching source transform definition")
+	}
+}
+
+func TestResolveTransformsForSourceRejectsMissingSourceIndex(t *testing.T) {
+	t.Parallel()
+
+	definitions := namedDefinitions{
+		"bad-transform": json.RawMessage(`{
+			"body": {"source":{"index":"collection"},"dest":{"index":"binder"}}
+		}`),
+	}
+	_, _, err := resolveTransformsForSource(definitions, []string{"bad-transform"}, "collection")
+	if err == nil {
+		t.Fatal("expected missing source_index error")
+	}
+}
+
+func TestResolveTransformsForSourceRejectsMissingBody(t *testing.T) {
+	t.Parallel()
+
+	definitions := namedDefinitions{
+		"bad-transform": json.RawMessage(`{
+			"source_index": "collection"
+		}`),
+	}
+	_, _, err := resolveTransformsForSource(definitions, []string{"bad-transform"}, "collection")
+	if err == nil {
+		t.Fatal("expected missing body error")
+	}
+}
+
+func TestRunStartsTransformsAfterEnrichExecution(t *testing.T) {
+	t.Parallel()
+
+	var (
+		mu         sync.Mutex
+		operations []string
+	)
+	recordOp := func(op string) {
+		mu.Lock()
+		defer mu.Unlock()
+		operations = append(operations, op)
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		method := r.Method
+		w.Header().Set("X-Elastic-Product", "Elasticsearch")
+
+		switch {
+		case method == http.MethodHead && path == "/collection":
+			w.WriteHeader(http.StatusOK)
+			return
+		case method == http.MethodGet && path == "/_transform/collection-to-binder":
+			recordOp("transform.get")
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"count":0,"transforms":[]}`))
+			return
+		case method == http.MethodPost && path == "/_transform/collection-to-binder/_stop":
+			recordOp("transform.stop")
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"error":{"type":"resource_not_found_exception"}}`))
+			return
+		case method == http.MethodPut && path == "/_transform/collection-to-binder":
+			recordOp("transform.put")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"acknowledged":true}`))
+			return
+		case method == http.MethodPost && path == "/collection/_refresh":
+			recordOp("index.refresh")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"_shards":{"total":1,"successful":1,"failed":0}}`))
+			return
+		case method == http.MethodGet && path == "/_enrich/policy":
+			recordOp("enrich.list")
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"policies":[{"config":{"match":{"name":"policy-a"}}}]}`))
+			return
+		case (method == http.MethodPut || method == http.MethodPost) && path == "/_enrich/policy/policy-a/_execute":
+			recordOp("enrich.execute")
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"status":{"phase":"COMPLETED"}}`))
+			return
+		case method == http.MethodPost && path == "/_transform/collection-to-binder/_start":
+			recordOp("transform.start")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"acknowledged":true}`))
+			return
+		default:
+			t.Fatalf("unexpected request: %s %s", method, path)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	transformsPath := filepath.Join(t.TempDir(), "transforms.json")
+	if err := os.WriteFile(transformsPath, []byte(`{
+  "collection-to-binder": {
+    "source_index": "collection",
+    "body": {"source":{"index":"collection"},"dest":{"index":"binder"},"pivot":{"group_by":{"id":{"terms":{"field":"id"}}},"aggregations":{"quantity_total":{"sum":{"field":"quantity"}}}}}
+  }
+}`), 0o644); err != nil {
+		t.Fatalf("write transforms fixture: %v", err)
+	}
+
+	_, err := Run(context.Background(), Options{
+		URL:            server.URL,
+		Index:          "collection",
+		SyncManaged:    true,
+		TransformsFile: transformsPath,
+		Enrich: EnrichOptions{
+			Enabled: true,
+			All:     true,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(operations) == 0 {
+		t.Fatal("expected transform and enrich operations to be recorded")
+	}
+
+	enrichIdx := -1
+	startIdx := -1
+	for i, op := range operations {
+		if op == "enrich.execute" && enrichIdx == -1 {
+			enrichIdx = i
+		}
+		if op == "transform.start" && startIdx == -1 {
+			startIdx = i
+		}
+	}
+	if enrichIdx == -1 {
+		t.Fatalf("expected enrich.execute operation, got %v", operations)
+	}
+	if startIdx == -1 {
+		t.Fatalf("expected transform.start operation, got %v", operations)
+	}
+	if startIdx <= enrichIdx {
+		t.Fatalf("expected transform.start after enrich.execute, got operations %v", operations)
 	}
 }
 
