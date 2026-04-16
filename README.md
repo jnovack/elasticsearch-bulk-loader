@@ -75,39 +75,39 @@ Full lifecycle run:
 package main
 
 import (
-	"context"
-	"log"
+    "context"
+    "log"
 
-	loaderpkg "github.com/jnovack/es-bulk-loader/pkg/loader"
+    loaderpkg "github.com/jnovack/es-bulk-loader/pkg/loader"
 )
 
 func main() {
-	result, err := loaderpkg.Run(context.Background(), loaderpkg.Options{
-		URL:           "http://localhost:9200",
-		Index:         "slugs",
-		SettingsFile:  "./examples/slugs/settings.json",
-		MappingsFile:  "./examples/slugs/mappings.json",
-		PipelinesFile: "./examples/slugs/pipelines.json",
-		PoliciesFile:  "./examples/slugs/policies.json",
-		DataFile:      "./examples/slugs/slugs.json",
-		DeleteIndex:   true,
-		SyncManaged:   true,
-		Enrich: loaderpkg.EnrichOptions{
-			Enabled: true,
-			All:     true,
-		},
-	})
-	if err != nil {
-		log.Fatal(err)
-	}
+    result, err := loaderpkg.Run(context.Background(), loaderpkg.Options{
+        URL:           "http://localhost:9200",
+        Index:         "slugs",
+        SettingsFile:  "./examples/slugs/settings.json",
+        MappingsFile:  "./examples/slugs/mappings.json",
+        PipelinesFile: "./examples/slugs/pipelines.json",
+        PoliciesFile:  "./examples/slugs/policies.json",
+        DataFile:      "./examples/slugs/slugs.json",
+        DeleteIndex:   true,
+        SyncManaged:   true,
+        Enrich: loaderpkg.EnrichOptions{
+            Enabled: true,
+            All:     true,
+        },
+    })
+    if err != nil {
+        log.Fatal(err)
+    }
 
-	log.Printf("index=%s processed=%d succeeded=%d failed=%d warnings=%d",
-		result.WriteIndex,
-		result.DocumentsProcessed,
-		result.DocumentsSucceeded,
-		result.DocumentsFailed,
-		len(result.Warnings),
-	)
+    log.Printf("index=%s processed=%d succeeded=%d failed=%d warnings=%d",
+        result.WriteIndex,
+        result.DocumentsProcessed,
+        result.DocumentsSucceeded,
+        result.DocumentsFailed,
+        len(result.Warnings),
+    )
 }
 ```
 
@@ -181,45 +181,45 @@ That ordering matters. The loader is intentionally opinionated so CI runs and op
 Settings can be loaded from a configuration file (e.g. `-config es-bulk-loader.conf`), the environment,
 or from the command-line.
 
-| Flag                 | Description                                                                  |
-|----------------------|------------------------------------------------------------------------------|
-| `-config`            | Path to configuration file with settings                                     |
-| `-url`               | Endpoint URL (e.g., `http://localhost:9200`)                                 |
-| `-insecureSkipVerify`| Skip TLS verification for HTTPS                                              |
-| `-index`             | Target index name (**required**)                                             |
-| `-alias`             | Treat `-index` as an alias and create timestamped indices as `<alias>-YYYYMMDDHHMMSS` when creating a new index |
-| `-keep-last`         | With `-alias`, keep only the newest N timestamped indices matching `<alias>-YYYYMMDDHHMMSS` (default: 0, disabled) |
-| `-settings`          | Optional path to JSON file with index settings                               |
-| `-mappings`          | Optional path to JSON file with index mappings                               |
-| `-pipelines`         | Optional path to JSON file with one or more ingest pipeline definitions      |
-| `-policies`          | Optional path to JSON file with one or more enrich policy definitions        |
-| `-batch`             | Number of documents per bulk insert (default: 1000)                          |
-| `-add`               | Append data to an existing index or create the index first if it does not exist |
-| `-flush`             | Delete all documents from an existing index without deleting the index, then load replacement data |
-| `-delete`            | Recreate data target before loading data: deletes concrete index in normal mode; rolls alias to a new timestamped index in `-alias` mode |
-| `-data`              | Path to JSON array of documents to load (**required with** `-add`, `-flush`, or `-delete`) |
-| `-sync-managed`      | Create or update declared ingest pipelines and enrich policies               |
-| `-nuke`              | Delete the current index and declared managed resources first, including dependent pipelines that reference declared enrich policies |
-| `-id`                | Field to use in the document to override _id (default: not set)              |
-| `-enrich`            | Run enrich policies after the bulk insert; omit value for all or pass a comma-separated list |
-| `-user` / `-pass`    | Username and password for Basic Auth                                         |
-| `-apiKey`            | Elasticsearch API key                                                        |
-| `-level`             | Log level filter: `trace`, `debug`, `info`, `warn`, or `error` (default: `info`) |
-| `-version`           | Print version and exit                                                       |
+| Flag | Description |
+| --- | --- |
+| `-config` | Path to configuration file with settings |
+| `-url` | Endpoint URL (e.g., `http://localhost:9200`) |
+| `-insecureSkipVerify` | Skip TLS verification for HTTPS |
+| `-index` | Target index name (**required**) |
+| `-alias` | Treat `-index` as an alias and create timestamped indices as `<alias>-YYYYMMDDHHMMSS` when creating a new index |
+| `-keep-last` | With `-alias`, keep only the newest N timestamped indices matching `<alias>-YYYYMMDDHHMMSS` (default: 0, disabled) |
+| `-settings` | Optional path to JSON file with index settings |
+| `-mappings` | Optional path to JSON file with index mappings |
+| `-pipelines` | Optional path to JSON file with one or more ingest pipeline definitions |
+| `-policies` | Optional path to JSON file with one or more enrich policy definitions |
+| `-batch` | Number of documents per bulk insert (default: 1000) |
+| `-add` | Append data to an existing index or create the index first if it does not exist |
+| `-flush` | Delete all documents from an existing index without deleting the index, then load replacement data |
+| `-delete` | Recreate data target before loading data: deletes concrete index in normal mode; rolls alias to a new timestamped index in `-alias` mode |
+| `-data` | Path to JSON array of documents to load (**required with** `-add`, `-flush`, or `-delete`) |
+| `-sync-managed` | Create or update declared ingest pipelines and enrich policies |
+| `-nuke` | Delete the current index and declared managed resources first, including dependent pipelines that reference declared enrich policies |
+| `-id` | Field to use in the document to override _id (default: not set) |
+| `-enrich` | Run enrich policies after the bulk insert; omit value for all or pass a comma-separated list |
+| `-user` / `-pass` | Username and password for Basic Auth |
+| `-apiKey` | Elasticsearch API key |
+| `-level` | Log level filter: `trace`, `debug`, `info`, `warn`, or `error` (default: `info`) |
+| `-version` | Print version and exit |
 
 ## Behavior Summary
 
 `-add`, `-flush`, and `-delete` are mutually exclusive.
 
-| Flags           | Effect                                                                                                                     |
-|-----------------|----------------------------------------------------------------------------------------------------------------------------|
-| `-add`          | Append data to an existing index, or create the index and load data if it does not exist                                   |
-| `-flush`        | Remove existing documents, keep the existing index structure, then load replacement data                                   |
-| `-delete`       | Recreate data target and reload data: concrete index is deleted/recreated in normal mode; alias mode creates a new timestamped index and repoints alias |
-| `-sync-managed` | Create or update declared pipelines and policies without changing document data by itself                                  |
-| `-nuke`         | Remove the current index and declared managed resources first; if combined with another action, that action runs afterward |
-| `-alias`        | Treat `-index` as an alias and use timestamped concrete index names (`<alias>-YYYYMMDDHHMMSS`) when a new index is created |
-| `-keep-last`    | With `-alias`, prune older timestamped concrete indices after the run and keep only the newest N by parsed timestamp suffix |
+| Flags | Effect |
+| --- | --- |
+| `-add` | Append data to an existing index, or create the index and load data if it does not exist |
+| `-flush` | Remove existing documents, keep the existing index structure, then load replacement data |
+| `-delete` | Recreate data target and reload data: concrete index is deleted/recreated in normal mode; alias mode creates a new timestamped index and repoints alias |
+| `-sync-managed` | Create or update declared pipelines and policies without changing document data by itself |
+| `-nuke` | Remove the current index and declared managed resources first; if combined with another action, that action runs afterward |
+| `-alias` | Treat `-index` as an alias and use timestamped concrete index names (`<alias>-YYYYMMDDHHMMSS`) when a new index is created |
+| `-keep-last` | With `-alias`, prune older timestamped concrete indices after the run and keep only the newest N by parsed timestamp suffix |
 
 Common combinations:
 
