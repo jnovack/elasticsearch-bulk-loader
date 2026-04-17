@@ -725,15 +725,13 @@ func Run(ctx context.Context, opts Options) (result Result, err error) {
 	}
 
 	deferPolicyCreationUntilAliasSwap := effectiveSyncManaged && *aliasMode && shouldCreateIndex
-	transformStartNames := make([]string, 0)
+	transformSyncNames := make([]string, 0)
 	if effectiveSyncManaged && exists {
 		if !shouldCreateIndex {
 			createPipelines(es, pipelineDefinitions, pipelineNames)
 		}
 		if len(transformNames) > 0 {
-			stopTransformsBestEffort(es, transformNames)
-			createOrUpdateTransforms(es, transformDefinitions, transformNames)
-			transformStartNames = append(transformStartNames, transformNames...)
+			transformSyncNames = append(transformSyncNames, transformNames...)
 		}
 		if !deferPolicyCreationUntilAliasSwap {
 			createPolicies(es, policyDefinitions, policyNames)
@@ -845,8 +843,10 @@ func Run(ctx context.Context, opts Options) (result Result, err error) {
 		result.EnrichSucceeded = enrichResult.Succeeded
 		result.EnrichFailed = enrichResult.Failed
 	}
-	if len(transformStartNames) > 0 {
-		startTransforms(es, transformStartNames)
+	if effectiveSyncManaged && len(transformSyncNames) > 0 {
+		stopTransformsBestEffort(es, transformSyncNames)
+		createOrUpdateTransforms(es, transformDefinitions, transformSyncNames)
+		startTransforms(es, transformSyncNames)
 	}
 
 	return result, nil

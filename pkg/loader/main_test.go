@@ -583,10 +583,14 @@ func TestRunStartsTransformsAfterEnrichExecution(t *testing.T) {
 	}
 
 	enrichIdx := -1
+	transformPutIdx := -1
 	startIdx := -1
 	for i, op := range operations {
 		if op == "enrich.execute" && enrichIdx == -1 {
 			enrichIdx = i
+		}
+		if op == "transform.put" && transformPutIdx == -1 {
+			transformPutIdx = i
 		}
 		if op == "transform.start" && startIdx == -1 {
 			startIdx = i
@@ -595,12 +599,353 @@ func TestRunStartsTransformsAfterEnrichExecution(t *testing.T) {
 	if enrichIdx == -1 {
 		t.Fatalf("expected enrich.execute operation, got %v", operations)
 	}
+	if transformPutIdx == -1 {
+		t.Fatalf("expected transform.put operation, got %v", operations)
+	}
 	if startIdx == -1 {
 		t.Fatalf("expected transform.start operation, got %v", operations)
+	}
+	if transformPutIdx <= enrichIdx {
+		t.Fatalf("expected transform.put after enrich.execute, got operations %v", operations)
 	}
 	if startIdx <= enrichIdx {
 		t.Fatalf("expected transform.start after enrich.execute, got operations %v", operations)
 	}
+}
+
+// TestRunAliasFirstCreateUpsertsTransformsAfterAliasUpdate verifies behavior for the related scenario.
+func TestRunAliasFirstCreateUpsertsTransformsAfterAliasUpdate(t *testing.T) {
+	t.Parallel()
+
+	var (
+		mu           sync.Mutex
+		operations   []string
+		aliasUpdated bool
+		createdIndex string
+	)
+	recordOp := func(op string) {
+		mu.Lock()
+		defer mu.Unlock()
+		operations = append(operations, op)
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Elastic-Product", "Elasticsearch")
+		method := r.Method
+		path := r.URL.Path
+
+		switch {
+		case method == http.MethodGet && path == "/_alias/collection":
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"error":{"type":"index_not_found_exception"}}`))
+			return
+		case method == http.MethodHead && path == "/collection":
+			w.WriteHeader(http.StatusNotFound)
+			return
+		case method == http.MethodPut && strings.HasPrefix(path, "/collection-"):
+			recordOp("index.create")
+			createdIndex = strings.TrimPrefix(path, "/")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"acknowledged":true}`))
+			return
+		case method == http.MethodHead && strings.HasPrefix(path, "/collection-"):
+			if createdIndex != "" && path == "/"+createdIndex {
+				w.WriteHeader(http.StatusOK)
+			} else {
+				w.WriteHeader(http.StatusNotFound)
+			}
+			return
+		case method == http.MethodPost && path == "/_bulk":
+			recordOp("bulk")
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"errors":false,"items":[{"index":{"_index":"collection","_id":"1","status":201}}]}`))
+			return
+		case method == http.MethodPost && path == "/_aliases":
+			recordOp("alias.update")
+			aliasUpdated = true
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"acknowledged":true}`))
+			return
+		case method == http.MethodGet && path == "/_transform/collection-to-binder":
+			recordOp("transform.get")
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"count":0,"transforms":[]}`))
+			return
+		case method == http.MethodPost && path == "/_transform/collection-to-binder/_stop":
+			recordOp("transform.stop")
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"error":{"type":"resource_not_found_exception"}}`))
+			return
+		case method == http.MethodPut && path == "/_transform/collection-to-binder":
+			recordOp("transform.put")
+			if !aliasUpdated {
+				w.WriteHeader(http.StatusBadRequest)
+				_, _ = w.Write([]byte(`{"error":{"type":"validation_exception","reason":"Validation Failed: 1: no such index [collection];"},"status":400}`))
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"acknowledged":true}`))
+			return
+		case method == http.MethodPost && path == "/_transform/collection-to-binder/_start":
+			recordOp("transform.start")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"acknowledged":true}`))
+			return
+		default:
+			t.Fatalf("unexpected request: %s %s", method, path)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	tempDir := t.TempDir()
+	dataPath := filepath.Join(tempDir, "data.json")
+	if err := os.WriteFile(dataPath, []byte(`[{"id":"1","name":"card"}]`), 0o644); err != nil {
+		t.Fatalf("write data fixture: %v", err)
+	}
+	transformsPath := filepath.Join(tempDir, "transforms.json")
+	if err := os.WriteFile(transformsPath, []byte(`{
+  "collection-to-binder": {
+    "source_index": "collection",
+    "body": {"source":{"index":"collection"},"dest":{"index":"binder"}}
+  }
+}`), 0o644); err != nil {
+		t.Fatalf("write transforms fixture: %v", err)
+	}
+
+	_, err := Run(context.Background(), Options{
+		URL:            server.URL,
+		Index:          "collection",
+		DataFile:       dataPath,
+		DeleteIndex:    true,
+		SyncManaged:    true,
+		AliasMode:      true,
+		TransformsFile: transformsPath,
+	})
+	if err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	aliasIdx := firstOperationIndex(operations, "alias.update")
+	transformPutIdx := firstOperationIndex(operations, "transform.put")
+	if aliasIdx == -1 || transformPutIdx == -1 {
+		t.Fatalf("expected alias.update and transform.put operations, got %v", operations)
+	}
+	if transformPutIdx <= aliasIdx {
+		t.Fatalf("expected transform.put after alias.update, got operations %v", operations)
+	}
+}
+
+// TestRunNonAliasCreateUpsertsTransformsAfterBulkLoad verifies behavior for the related scenario.
+func TestRunNonAliasCreateUpsertsTransformsAfterBulkLoad(t *testing.T) {
+	t.Parallel()
+
+	var (
+		mu         sync.Mutex
+		operations []string
+		indexReady bool
+	)
+	recordOp := func(op string) {
+		mu.Lock()
+		defer mu.Unlock()
+		operations = append(operations, op)
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Elastic-Product", "Elasticsearch")
+		method := r.Method
+		path := r.URL.Path
+
+		switch {
+		case method == http.MethodHead && path == "/collection":
+			if indexReady {
+				w.WriteHeader(http.StatusOK)
+			} else {
+				w.WriteHeader(http.StatusNotFound)
+			}
+			return
+		case method == http.MethodPut && path == "/collection":
+			recordOp("index.create")
+			indexReady = true
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"acknowledged":true}`))
+			return
+		case method == http.MethodPost && path == "/_bulk":
+			recordOp("bulk")
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"errors":false,"items":[{"index":{"_index":"collection","_id":"1","status":201}}]}`))
+			return
+		case method == http.MethodGet && path == "/_transform/collection-to-binder":
+			recordOp("transform.get")
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"count":0,"transforms":[]}`))
+			return
+		case method == http.MethodPost && path == "/_transform/collection-to-binder/_stop":
+			recordOp("transform.stop")
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"error":{"type":"resource_not_found_exception"}}`))
+			return
+		case method == http.MethodPut && path == "/_transform/collection-to-binder":
+			recordOp("transform.put")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"acknowledged":true}`))
+			return
+		case method == http.MethodPost && path == "/_transform/collection-to-binder/_start":
+			recordOp("transform.start")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"acknowledged":true}`))
+			return
+		default:
+			t.Fatalf("unexpected request: %s %s", method, path)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	tempDir := t.TempDir()
+	dataPath := filepath.Join(tempDir, "data.json")
+	if err := os.WriteFile(dataPath, []byte(`[{"id":"1","name":"card"}]`), 0o644); err != nil {
+		t.Fatalf("write data fixture: %v", err)
+	}
+	transformsPath := filepath.Join(tempDir, "transforms.json")
+	if err := os.WriteFile(transformsPath, []byte(`{
+  "collection-to-binder": {
+    "source_index": "collection",
+    "body": {"source":{"index":"collection"},"dest":{"index":"binder"}}
+  }
+}`), 0o644); err != nil {
+		t.Fatalf("write transforms fixture: %v", err)
+	}
+
+	_, err := Run(context.Background(), Options{
+		URL:            server.URL,
+		Index:          "collection",
+		DataFile:       dataPath,
+		AddToIndex:     true,
+		SyncManaged:    true,
+		TransformsFile: transformsPath,
+	})
+	if err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	bulkIdx := firstOperationIndex(operations, "bulk")
+	transformPutIdx := firstOperationIndex(operations, "transform.put")
+	if bulkIdx == -1 || transformPutIdx == -1 {
+		t.Fatalf("expected bulk and transform.put operations, got %v", operations)
+	}
+	if transformPutIdx <= bulkIdx {
+		t.Fatalf("expected transform.put after bulk, got operations %v", operations)
+	}
+}
+
+// TestRunCreatesPipelinesBeforeIndexWhenDefaultPipelineIsConfigured verifies behavior for the related scenario.
+func TestRunCreatesPipelinesBeforeIndexWhenDefaultPipelineIsConfigured(t *testing.T) {
+	t.Parallel()
+
+	var (
+		mu         sync.Mutex
+		operations []string
+		indexReady bool
+	)
+	recordOp := func(op string) {
+		mu.Lock()
+		defer mu.Unlock()
+		operations = append(operations, op)
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Elastic-Product", "Elasticsearch")
+		method := r.Method
+		path := r.URL.Path
+
+		switch {
+		case method == http.MethodHead && path == "/cards":
+			if indexReady {
+				w.WriteHeader(http.StatusOK)
+			} else {
+				w.WriteHeader(http.StatusNotFound)
+			}
+			return
+		case method == http.MethodPut && path == "/_ingest/pipeline/default-pipe":
+			recordOp("pipeline.put")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"acknowledged":true}`))
+			return
+		case method == http.MethodPut && path == "/cards":
+			recordOp("index.create")
+			indexReady = true
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"acknowledged":true}`))
+			return
+		case method == http.MethodPost && path == "/_bulk":
+			recordOp("bulk")
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"errors":false,"items":[{"index":{"_index":"cards","_id":"1","status":201}}]}`))
+			return
+		default:
+			t.Fatalf("unexpected request: %s %s", method, path)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	tempDir := t.TempDir()
+	dataPath := filepath.Join(tempDir, "data.json")
+	if err := os.WriteFile(dataPath, []byte(`[{"id":"1","name":"card"}]`), 0o644); err != nil {
+		t.Fatalf("write data fixture: %v", err)
+	}
+	settingsPath := filepath.Join(tempDir, "settings.json")
+	if err := os.WriteFile(settingsPath, []byte(`{"settings":{"index.default_pipeline":"default-pipe"}}`), 0o644); err != nil {
+		t.Fatalf("write settings fixture: %v", err)
+	}
+	pipelinesPath := filepath.Join(tempDir, "pipelines.json")
+	if err := os.WriteFile(pipelinesPath, []byte(`{
+  "default-pipe": {
+    "description": "default pipeline",
+    "processors": []
+  }
+}`), 0o644); err != nil {
+		t.Fatalf("write pipelines fixture: %v", err)
+	}
+
+	_, err := Run(context.Background(), Options{
+		URL:           server.URL,
+		Index:         "cards",
+		DataFile:      dataPath,
+		AddToIndex:    true,
+		SyncManaged:   true,
+		SettingsFile:  settingsPath,
+		PipelinesFile: pipelinesPath,
+	})
+	if err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	pipelineIdx := firstOperationIndex(operations, "pipeline.put")
+	indexCreateIdx := firstOperationIndex(operations, "index.create")
+	if pipelineIdx == -1 || indexCreateIdx == -1 {
+		t.Fatalf("expected pipeline.put and index.create operations, got %v", operations)
+	}
+	if indexCreateIdx <= pipelineIdx {
+		t.Fatalf("expected pipeline.put before index.create, got operations %v", operations)
+	}
+}
+
+// firstOperationIndex centralizes this code path so package behavior stays consistent.
+func firstOperationIndex(operations []string, operation string) int {
+	for idx, current := range operations {
+		if current == operation {
+			return idx
+		}
+	}
+	return -1
 }
 
 // TestSelectedDataAction verifies behavior for the related scenario.
