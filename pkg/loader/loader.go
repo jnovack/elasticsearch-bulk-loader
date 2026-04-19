@@ -2207,29 +2207,13 @@ func createOrUpdateTransforms(es *elasticsearch.Client, definitions namedDefinit
 			fatal().Str("transform", name).Msg("Transform definition missing from parsed transform file")
 		}
 
-		exists := transformExists(es, name)
-		if exists {
-			res, err := es.TransformUpdateTransform(
-				strings.NewReader(string(definition)),
-				name,
-				es.TransformUpdateTransform.WithContext(context.Background()),
-				es.TransformUpdateTransform.WithHeader(map[string]string{
-					"Content-Type": "application/json",
-					"Accept":       "application/json",
-				}),
-			)
-			checkErr("updating transform", err)
-			body, _ := io.ReadAll(res.Body)
-			res.Body.Close()
-			if res.IsError() {
-				fatal().
-					Str("transform", name).
-					Int("status_code", res.StatusCode).
-					Str("body", string(body)).
-					Msg("Failed to update transform")
-			}
-			log.Info().Str("transform", name).Msg("Transform updated")
-			continue
+		// ES 9.x does not allow updating immutable transform properties
+		// (pivot, latest) via TransformUpdateTransform. Delete and recreate
+		// instead — stopTransformsBestEffort has already stopped the
+		// transform, and deleteTransforms uses DeleteDestIndex: false to
+		// preserve the destination index.
+		if transformExists(es, name) {
+			deleteTransforms(es, []string{name})
 		}
 
 		res, err := es.TransformPutTransform(
