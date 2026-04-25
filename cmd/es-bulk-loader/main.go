@@ -168,6 +168,9 @@ func main() {
 	transformsFile := flag.String("transforms", "", "Path to JSON file containing one or more transform definitions (optional)")
 	dataFile := flag.String("data", "", "Path to bulk JSON data file (array of objects)")
 	batchSize := flag.Int("batch", 1000, "Batch size for bulk inserts")
+	bulkRetryAttempts := flag.Int("bulk-retry-attempts", 4, "Total bulk request attempts, including first try")
+	bulkRetryBackoffBase := flag.Duration("bulk-retry-backoff-base", 500*time.Millisecond, "Base backoff for retryable bulk failures")
+	bulkRetryBackoffMax := flag.Duration("bulk-retry-backoff-max", 5*time.Second, "Maximum backoff for retryable bulk failures")
 	deleteIndex := flag.Bool("delete", false, "Delete index if it exists")
 	addToIndex := flag.Bool("add", false, "Add documents to existing index")
 	flushIndex := flag.Bool("flush", false, "Delete all documents from an existing index without deleting the index")
@@ -213,27 +216,30 @@ func main() {
 		Msg("jnovack/es-bulk-loader starting...")
 
 	opts := loader.Options{
-		URL:                *url,
-		InsecureSkipVerify: *insecure,
-		Index:              *index,
-		SettingsFile:       *settingsFile,
-		MappingsFile:       *mappingsFile,
-		PipelinesFile:      *pipelinesFile,
-		PoliciesFile:       *policiesFile,
-		TransformsFile:     *transformsFile,
-		DataFile:           *dataFile,
-		BatchSize:          *batchSize,
-		DeleteIndex:        *deleteIndex,
-		AddToIndex:         *addToIndex,
-		FlushIndex:         *flushIndex,
-		SyncManaged:        *syncManaged,
-		AliasMode:          *aliasMode,
-		KeepLast:           *keepLast,
-		Nuke:               *nuke,
-		IDField:            *idField,
-		User:               *user,
-		Pass:               *pass,
-		APIKey:             *apiKey,
+		URL:                  *url,
+		InsecureSkipVerify:   *insecure,
+		Index:                *index,
+		SettingsFile:         *settingsFile,
+		MappingsFile:         *mappingsFile,
+		PipelinesFile:        *pipelinesFile,
+		PoliciesFile:         *policiesFile,
+		TransformsFile:       *transformsFile,
+		DataFile:             *dataFile,
+		BatchSize:            *batchSize,
+		BulkRetryAttempts:    *bulkRetryAttempts,
+		BulkRetryBackoffBase: *bulkRetryBackoffBase,
+		BulkRetryBackoffMax:  *bulkRetryBackoffMax,
+		DeleteIndex:          *deleteIndex,
+		AddToIndex:           *addToIndex,
+		FlushIndex:           *flushIndex,
+		SyncManaged:          *syncManaged,
+		AliasMode:            *aliasMode,
+		KeepLast:             *keepLast,
+		Nuke:                 *nuke,
+		IDField:              *idField,
+		User:                 *user,
+		Pass:                 *pass,
+		APIKey:               *apiKey,
 		Enrich: loader.EnrichOptions{
 			Enabled:  enrich.enabled,
 			All:      enrich.all,

@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"regexp"
@@ -112,11 +113,17 @@ type Options struct {
 	KeepLast           int
 	Nuke               bool
 	IDField            string
-	User               string
-	Pass               string
-	APIKey             string
-	TemplateVariables  map[string]string
-	Enrich             EnrichOptions
+	// BulkRetryAttempts controls total bulk request attempts, including the first attempt.
+	BulkRetryAttempts int
+	// BulkRetryBackoffBase controls the first retry wait for retryable bulk failures.
+	BulkRetryBackoffBase time.Duration
+	// BulkRetryBackoffMax caps exponential bulk retry waits.
+	BulkRetryBackoffMax time.Duration
+	User                string
+	Pass                string
+	APIKey              string
+	TemplateVariables   map[string]string
+	Enrich              EnrichOptions
 }
 
 // Result groups state used to coordinate related package behavior.
@@ -187,6 +194,15 @@ const (
 	dataActionDelete dataAction = "delete"
 )
 
+const (
+	// defaultBulkRetryAttempts defines package-level values shared by related execution paths.
+	defaultBulkRetryAttempts = 4
+	// defaultBulkRetryBackoffBase defines package-level values shared by related execution paths.
+	defaultBulkRetryBackoffBase = 500 * time.Millisecond
+	// defaultBulkRetryBackoffMax defines package-level values shared by related execution paths.
+	defaultBulkRetryBackoffMax = 5 * time.Second
+)
+
 // enrichPolicySummary groups state used to coordinate related package behavior.
 type enrichPolicySummary struct {
 	Config map[string]struct {
@@ -199,12 +215,24 @@ type enrichPoliciesResponse struct {
 	Policies []enrichPolicySummary `json:"policies"`
 }
 
+// enrichPhaseStatus holds the phase field returned by enrich policy execution.
+type enrichPhaseStatus struct {
+	Phase string `json:"phase"`
+}
+
 // enrichExecuteResponse groups state used to coordinate related package behavior.
 type enrichExecuteResponse struct {
-	Status *struct {
-		Phase string `json:"phase"`
-	} `json:"status,omitempty"`
-	Task *string `json:"task,omitempty"`
+	Status *enrichPhaseStatus `json:"status,omitempty"`
+	Task   *string            `json:"task,omitempty"`
+}
+
+// taskGetResponse holds the response from the Tasks API for async enrich policy execution.
+type taskGetResponse struct {
+	Completed bool `json:"completed"`
+	Task      struct {
+		Status *enrichPhaseStatus `json:"status,omitempty"`
+	} `json:"task"`
+	Response *enrichExecuteResponse `json:"response,omitempty"`
 }
 
 // managedPolicyPlan groups state used to coordinate related package behavior.
@@ -234,6 +262,24 @@ type enrichRunSummary struct {
 	Missing   []string
 	Succeeded int
 	Failed    int
+}
+
+// sleepWithContext centralizes retry sleeps so the code path can be reused by tests.
+var sleepWithContext = sleepForDuration
+
+// sleepForDuration centralizes this code path so package behavior stays consistent.
+func sleepForDuration(ctx context.Context, d time.Duration) error {
+	if d <= 0 {
+		return nil
+	}
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }
 
 // ─── Option Parsing Helpers ────────────────────────────────────────────────────
@@ -413,7 +459,9 @@ func withTimestampLogger(base zerolog.Logger) zerolog.Logger {
 
 // Run centralizes this code path so package behavior stays consistent.
 func Run(ctx context.Context, opts Options) (result Result, err error) {
-	_ = ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	previousLogger := log.Logger
 	log.Logger = withTimestampLogger(log.Logger)
 	defer func() {
@@ -438,6 +486,9 @@ func Run(ctx context.Context, opts Options) (result Result, err error) {
 	keepLast := &opts.KeepLast
 	nuke := &opts.Nuke
 	idField := &opts.IDField
+	bulkRetryAttempts := &opts.BulkRetryAttempts
+	bulkRetryBackoffBase := &opts.BulkRetryBackoffBase
+	bulkRetryBackoffMax := &opts.BulkRetryBackoffMax
 	user := &opts.User
 	pass := &opts.Pass
 	apiKey := &opts.APIKey
@@ -449,6 +500,18 @@ func Run(ctx context.Context, opts Options) (result Result, err error) {
 	}
 	if *batchSize <= 0 {
 		*batchSize = 1000
+	}
+	if *bulkRetryAttempts <= 0 {
+		*bulkRetryAttempts = defaultBulkRetryAttempts
+	}
+	if *bulkRetryBackoffBase <= 0 {
+		*bulkRetryBackoffBase = defaultBulkRetryBackoffBase
+	}
+	if *bulkRetryBackoffMax <= 0 {
+		*bulkRetryBackoffMax = defaultBulkRetryBackoffMax
+	}
+	if *bulkRetryBackoffMax < *bulkRetryBackoffBase {
+		*bulkRetryBackoffMax = *bulkRetryBackoffBase
 	}
 
 	defer func() {
@@ -508,7 +571,9 @@ func Run(ctx context.Context, opts Options) (result Result, err error) {
 	}
 
 	cfg := elasticsearch.Config{
-		Addresses: []string{*url},
+		Addresses:    []string{*url},
+		DisableRetry: true,
+		MaxRetries:   0,
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{
 				InsecureSkipVerify: *insecure,
@@ -761,6 +826,7 @@ func Run(ctx context.Context, opts Options) (result Result, err error) {
 			fatal().Msg("Data file must be a JSON array")
 		}
 
+		log.Debug().Str("data_file", *dataFile).Msg("Counting documents in data file")
 		total := 0
 		for dec.More() {
 			var tmp map[string]interface{}
@@ -769,6 +835,7 @@ func Run(ctx context.Context, opts Options) (result Result, err error) {
 			}
 			total++
 		}
+		log.Debug().Str("data_file", *dataFile).Int("total", total).Msg("Document count complete")
 
 		if _, err := f.Seek(0, 0); err != nil {
 			fatal().Err(err).Msg("Error rewinding data file")
@@ -791,7 +858,18 @@ func Run(ctx context.Context, opts Options) (result Result, err error) {
 			}
 			batch = append(batch, doc)
 			if len(batch) == *batchSize {
-				batchResult := bulkInsert(es, writeIndex, batch, processed+len(batch), total, *idField)
+				batchResult := bulkInsert(
+					ctx,
+					es,
+					writeIndex,
+					batch,
+					processed+len(batch),
+					total,
+					*bulkRetryAttempts,
+					*bulkRetryBackoffBase,
+					*bulkRetryBackoffMax,
+					*idField,
+				)
 				processed += len(batch)
 				succeededTotal += batchResult.Succeeded
 				failedTotal += batchResult.Failed
@@ -799,7 +877,18 @@ func Run(ctx context.Context, opts Options) (result Result, err error) {
 			}
 		}
 		if len(batch) > 0 {
-			batchResult := bulkInsert(es, writeIndex, batch, processed+len(batch), total, *idField)
+			batchResult := bulkInsert(
+				ctx,
+				es,
+				writeIndex,
+				batch,
+				processed+len(batch),
+				total,
+				*bulkRetryAttempts,
+				*bulkRetryBackoffBase,
+				*bulkRetryBackoffMax,
+				*idField,
+			)
 			processed += len(batch)
 			succeededTotal += batchResult.Succeeded
 			failedTotal += batchResult.Failed
@@ -2708,13 +2797,36 @@ func resolveEnrichTargets(enrich *enrichFlagValue, available []string, declared 
 	return targets, missing
 }
 
+// logEnrichResult emits the final success/failure log for an enrich policy execution.
+func logEnrichResult(policy string, status *enrichPhaseStatus, startTime time.Time) bool {
+	phase, isFailure := "", false
+	if status != nil {
+		phase = status.Phase
+		isFailure = strings.EqualFold(phase, "FAILED") || strings.EqualFold(phase, "CANCELLED")
+	}
+	event := log.Debug()
+	if isFailure {
+		event = log.Error()
+	}
+	entry := event.Str("policy", policy).Float64("time_taken", time.Since(startTime).Seconds())
+	if phase != "" {
+		entry = entry.Str("phase", phase)
+	}
+	msg := "Enrich policy execution succeeded"
+	if isFailure {
+		msg = "Enrich policy execution failed"
+	}
+	entry.Msg(msg)
+	return !isFailure
+}
+
 // executeEnrichPolicy centralizes this code path so package behavior stays consistent.
 func executeEnrichPolicy(es *elasticsearch.Client, policy string) bool {
 	startTime := time.Now()
 	res, err := es.EnrichExecutePolicy(
 		policy,
 		es.EnrichExecutePolicy.WithContext(context.Background()),
-		es.EnrichExecutePolicy.WithWaitForCompletion(true),
+		es.EnrichExecutePolicy.WithWaitForCompletion(false),
 		es.EnrichExecutePolicy.WithHeader(map[string]string{
 			"Accept": "application/json",
 		}),
@@ -2744,39 +2856,57 @@ func executeEnrichPolicy(es *elasticsearch.Client, policy string) bool {
 		return false
 	}
 
-	var parsed enrichExecuteResponse
-	if err := json.NewDecoder(res.Body).Decode(&parsed); err != nil {
+	var kickoff enrichExecuteResponse
+	if err := json.NewDecoder(res.Body).Decode(&kickoff); err != nil {
 		log.Error().Err(err).Str("policy", policy).Msg("Unable to parse enrich policy execution response")
 		return false
 	}
 
-	isFailure := false
-	event := log.Debug()
-	phase := ""
-	if parsed.Status != nil {
-		phase = parsed.Status.Phase
-		if strings.EqualFold(phase, "FAILED") || strings.EqualFold(phase, "CANCELLED") {
-			isFailure = true
-			event = log.Error()
+	// Synchronous completion — small policy or ES returned immediately.
+	if kickoff.Task == nil || *kickoff.Task == "" {
+		return logEnrichResult(policy, kickoff.Status, startTime)
+	}
+
+	taskID := *kickoff.Task
+	pollInterval := 2 * time.Second
+	for pollCount := 1; ; pollCount++ {
+		time.Sleep(pollInterval)
+
+		taskRes, err := es.Tasks.Get(taskID)
+		if err != nil {
+			log.Error().Err(err).Str("policy", policy).Str("task", taskID).Msg("Failed to poll enrich policy task")
+			return false
+		}
+		var task taskGetResponse
+		decodeErr := json.NewDecoder(taskRes.Body).Decode(&task)
+		taskRes.Body.Close()
+		if decodeErr != nil {
+			log.Error().Err(decodeErr).Str("policy", policy).Str("task", taskID).Msg("Unable to parse enrich policy task response")
+			return false
+		}
+
+		phase := ""
+		if task.Task.Status != nil {
+			phase = task.Task.Status.Phase
+		}
+		log.Debug().
+			Str("policy", policy).
+			Str("phase", phase).
+			Float64("elapsed_s", time.Since(startTime).Seconds()).
+			Msg("Enrich policy execution in progress")
+
+		if task.Completed {
+			status := task.Task.Status
+			if task.Response != nil && task.Response.Status != nil {
+				status = task.Response.Status
+			}
+			return logEnrichResult(policy, status, startTime)
+		}
+
+		if pollCount == 5 {
+			pollInterval = 5 * time.Second
 		}
 	}
-
-	entry := event.
-		Str("policy", policy).
-		Float64("time_taken", time.Since(startTime).Seconds())
-	if phase != "" {
-		entry = entry.Str("phase", phase)
-	}
-	if parsed.Task != nil && *parsed.Task != "" {
-		entry = entry.Str("task", *parsed.Task)
-	}
-
-	message := "Enrich policy execution succeeded"
-	if isFailure {
-		message = "Enrich policy execution failed"
-	}
-	entry.Msg(message)
-	return !isFailure
 }
 
 // isUnsupportedEnrichAPI centralizes this code path so package behavior stays consistent.
@@ -2831,7 +2961,19 @@ func transformStartAlreadyStarted(statusCode int, body []byte) bool {
 // ─── Bulk Insert ───────────────────────────────────────────────────────────────
 
 // bulkInsert handles a batch of documents and validates per-item bulk response status.
-func bulkInsert(es *elasticsearch.Client, index string, batch []map[string]interface{}, inserted, total int, idField string) bulkInsertResult {
+func bulkInsert(
+	ctx context.Context,
+	es *elasticsearch.Client,
+	index string,
+	batch []map[string]interface{},
+	inserted, total int,
+	retryAttempts int,
+	retryBackoffBase, retryBackoffMax time.Duration,
+	idField string,
+) bulkInsertResult {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	var buf strings.Builder
 	for _, doc := range batch {
 		meta := map[string]map[string]string{"index": {"_index": index}}
@@ -2851,19 +2993,83 @@ func bulkInsert(es *elasticsearch.Client, index string, batch []map[string]inter
 		buf.Write(docLine)
 		buf.WriteByte('\n')
 	}
-	startTime := time.Now()
-	res, err := es.Bulk(strings.NewReader(buf.String()), es.Bulk.WithContext(context.Background()))
-	duration := time.Since(startTime)
-	checkErr("bulk insert", err)
-	defer res.Body.Close()
-
-	if res.IsError() {
-		body, _ := io.ReadAll(res.Body)
-		fatal().
-			Int("status_code", res.StatusCode).
-			Str("body", string(body)).
-			Msg("Bulk API request failed")
+	payload := buf.String()
+	if retryAttempts <= 0 {
+		retryAttempts = defaultBulkRetryAttempts
 	}
+	if retryBackoffBase <= 0 {
+		retryBackoffBase = defaultBulkRetryBackoffBase
+	}
+	if retryBackoffMax <= 0 {
+		retryBackoffMax = defaultBulkRetryBackoffMax
+	}
+	if retryBackoffMax < retryBackoffBase {
+		retryBackoffMax = retryBackoffBase
+	}
+
+	var (
+		res      *esapi.Response
+		err      error
+		duration time.Duration
+	)
+	for attempt := 1; attempt <= retryAttempts; attempt++ {
+		startTime := time.Now()
+		res, err = es.Bulk(strings.NewReader(payload), es.Bulk.WithContext(ctx))
+		duration = time.Since(startTime)
+
+		if err != nil {
+			if ctx.Err() != nil {
+				fatal().Err(ctx.Err()).Msg("Bulk API request failed")
+			}
+			if shouldRetryBulkRequest(0, err) && attempt < retryAttempts {
+				nextBackoff := computeExponentialBackoff(attempt, retryBackoffBase, retryBackoffMax)
+				log.Warn().
+					Err(err).
+					Int("attempt", attempt).
+					Int("max_attempts", retryAttempts).
+					Str("next_backoff", nextBackoff.String()).
+					Msg("Bulk API request failed; retrying")
+				if sleepErr := sleepWithContext(ctx, nextBackoff); sleepErr != nil {
+					fatal().Err(sleepErr).Msg("Bulk API request failed")
+				}
+				continue
+			}
+			fatal().Err(err).Msg("Bulk API request failed")
+		}
+
+		if res.IsError() {
+			body, _ := io.ReadAll(res.Body)
+			_ = res.Body.Close()
+			if shouldRetryBulkRequest(res.StatusCode, nil) && attempt < retryAttempts {
+				nextBackoff := computeExponentialBackoff(attempt, retryBackoffBase, retryBackoffMax)
+				log.Warn().
+					Int("status_code", res.StatusCode).
+					Str("body", string(body)).
+					Int("attempt", attempt).
+					Int("max_attempts", retryAttempts).
+					Str("next_backoff", nextBackoff.String()).
+					Msg("Bulk API request failed; retrying")
+				if sleepErr := sleepWithContext(ctx, nextBackoff); sleepErr != nil {
+					fatal().Err(sleepErr).Msg("Bulk API request failed")
+				}
+				continue
+			}
+			fatal().
+				Int("status_code", res.StatusCode).
+				Str("body", string(body)).
+				Msg("Bulk API request failed")
+		}
+
+		if attempt > 1 {
+			log.Info().
+				Int("attempt", attempt).
+				Int("max_attempts", retryAttempts).
+				Float64("time_taken", duration.Seconds()).
+				Msg("Bulk API request retry succeeded")
+		}
+		break
+	}
+	defer res.Body.Close()
 
 	var parsed bulkResponse
 	if err := json.NewDecoder(res.Body).Decode(&parsed); err != nil {
@@ -2915,7 +3121,54 @@ func bulkInsert(es *elasticsearch.Client, index string, batch []map[string]inter
 		Float64("time_taken", duration.Seconds()).
 		Msg("Processed batch")
 
-	// TODO: Add targeted retries for retryable statuses (429/503) with exponential backoff.
 	// TODO: Persist non-retryable item failures to a dead-letter file for later replay.
 	return bulkInsertResult{Succeeded: succeeded, Failed: failed}
+}
+
+// shouldRetryBulkRequest centralizes retryability checks for bulk request failures.
+func shouldRetryBulkRequest(statusCode int, err error) bool {
+	if isRetryableBulkStatus(statusCode) {
+		return true
+	}
+	return isRetryableTransportError(err)
+}
+
+// isRetryableBulkStatus centralizes retryable bulk HTTP status classification.
+func isRetryableBulkStatus(statusCode int) bool {
+	switch statusCode {
+	case http.StatusTooManyRequests, http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
+		return true
+	default:
+		return false
+	}
+}
+
+// isRetryableTransportError centralizes retryable transport error classification.
+func isRetryableTransportError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, context.Canceled) {
+		return false
+	}
+	var netErr net.Error
+	if errors.As(err, &netErr) {
+		return netErr.Timeout() || netErr.Temporary()
+	}
+	return true
+}
+
+// computeExponentialBackoff centralizes capped exponential retry delays.
+func computeExponentialBackoff(attempt int, base, max time.Duration) time.Duration {
+	if attempt <= 0 || base <= 0 {
+		return 0
+	}
+	backoff := base
+	if attempt > 1 {
+		backoff = base << (attempt - 1)
+	}
+	if max > 0 && backoff > max {
+		return max
+	}
+	return backoff
 }

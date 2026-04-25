@@ -938,6 +938,235 @@ func TestRunCreatesPipelinesBeforeIndexWhenDefaultPipelineIsConfigured(t *testin
 	}
 }
 
+// TestRunRetriesBulkOnRetryableStatus verifies behavior for the related scenario.
+func TestRunRetriesBulkOnRetryableStatus(t *testing.T) {
+	t.Parallel()
+
+	var bulkAttempts int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Elastic-Product", "Elasticsearch")
+		switch {
+		case r.Method == http.MethodHead && r.URL.Path == "/cards":
+			w.WriteHeader(http.StatusOK)
+			return
+		case r.Method == http.MethodPost && r.URL.Path == "/_bulk":
+			bulkAttempts++
+			if bulkAttempts == 1 {
+				w.WriteHeader(http.StatusServiceUnavailable)
+				_, _ = w.Write([]byte(`{"error":true,"message":"transient"}`))
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"errors":false,"items":[{"index":{"_index":"cards","_id":"1","status":201}}]}`))
+			return
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	_, err := Run(context.Background(), Options{
+		URL:        server.URL,
+		Index:      "cards",
+		DataFile:   writeBulkDataFixture(t),
+		AddToIndex: true,
+		BatchSize:  1,
+	})
+	if err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+	if bulkAttempts != 2 {
+		t.Fatalf("expected 2 bulk attempts, got %d", bulkAttempts)
+	}
+}
+
+// TestRunRetriesBulkOnTransportFailure verifies behavior for the related scenario.
+func TestRunRetriesBulkOnTransportFailure(t *testing.T) {
+	t.Parallel()
+
+	var bulkAttempts int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Elastic-Product", "Elasticsearch")
+		switch {
+		case r.Method == http.MethodHead && r.URL.Path == "/cards":
+			w.WriteHeader(http.StatusOK)
+			return
+		case r.Method == http.MethodPost && r.URL.Path == "/_bulk":
+			bulkAttempts++
+			if bulkAttempts == 1 {
+				hijacker, ok := w.(http.Hijacker)
+				if !ok {
+					t.Fatal("response writer does not support hijacking")
+				}
+				conn, _, err := hijacker.Hijack()
+				if err != nil {
+					t.Fatalf("hijack returned error: %v", err)
+				}
+				_ = conn.Close()
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"errors":false,"items":[{"index":{"_index":"cards","_id":"1","status":201}}]}`))
+			return
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	_, err := Run(context.Background(), Options{
+		URL:        server.URL,
+		Index:      "cards",
+		DataFile:   writeBulkDataFixture(t),
+		AddToIndex: true,
+		BatchSize:  1,
+	})
+	if err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+	if bulkAttempts != 2 {
+		t.Fatalf("expected 2 bulk attempts, got %d", bulkAttempts)
+	}
+}
+
+// TestRunDoesNotRetryBulkOnBadRequest verifies behavior for the related scenario.
+func TestRunDoesNotRetryBulkOnBadRequest(t *testing.T) {
+	t.Parallel()
+
+	var bulkAttempts int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Elastic-Product", "Elasticsearch")
+		switch {
+		case r.Method == http.MethodHead && r.URL.Path == "/cards":
+			w.WriteHeader(http.StatusOK)
+			return
+		case r.Method == http.MethodPost && r.URL.Path == "/_bulk":
+			bulkAttempts++
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = w.Write([]byte(`{"error":true,"message":"bad request"}`))
+			return
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	_, err := Run(context.Background(), Options{
+		URL:        server.URL,
+		Index:      "cards",
+		DataFile:   writeBulkDataFixture(t),
+		AddToIndex: true,
+		BatchSize:  1,
+	})
+	if err == nil {
+		t.Fatal("expected Run to fail")
+	}
+	if bulkAttempts != 1 {
+		t.Fatalf("expected 1 bulk attempt, got %d", bulkAttempts)
+	}
+}
+
+// TestRunExhaustsRetriesOnRetryableStatus verifies behavior for the related scenario.
+func TestRunExhaustsRetriesOnRetryableStatus(t *testing.T) {
+	t.Parallel()
+
+	var bulkAttempts int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Elastic-Product", "Elasticsearch")
+		switch {
+		case r.Method == http.MethodHead && r.URL.Path == "/cards":
+			w.WriteHeader(http.StatusOK)
+			return
+		case r.Method == http.MethodPost && r.URL.Path == "/_bulk":
+			bulkAttempts++
+			w.WriteHeader(http.StatusTooManyRequests)
+			_, _ = w.Write([]byte(`{"error":true,"message":"too many requests"}`))
+			return
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	_, err := Run(context.Background(), Options{
+		URL:               server.URL,
+		Index:             "cards",
+		DataFile:          writeBulkDataFixture(t),
+		AddToIndex:        true,
+		BatchSize:         1,
+		BulkRetryAttempts: 3,
+	})
+	if err == nil {
+		t.Fatal("expected Run to fail")
+	}
+	if bulkAttempts != 3 {
+		t.Fatalf("expected 3 bulk attempts, got %d", bulkAttempts)
+	}
+}
+
+// TestRunRetryBackoffCapsAtConfiguredMax verifies behavior for the related scenario.
+func TestRunRetryBackoffCapsAtConfiguredMax(t *testing.T) {
+	previousSleep := sleepWithContext
+	sleeps := make([]time.Duration, 0, 3)
+	sleepWithContext = func(_ context.Context, d time.Duration) error {
+		sleeps = append(sleeps, d)
+		return nil
+	}
+	t.Cleanup(func() {
+		sleepWithContext = previousSleep
+	})
+
+	var bulkAttempts int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Elastic-Product", "Elasticsearch")
+		switch {
+		case r.Method == http.MethodHead && r.URL.Path == "/cards":
+			w.WriteHeader(http.StatusOK)
+			return
+		case r.Method == http.MethodPost && r.URL.Path == "/_bulk":
+			bulkAttempts++
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = w.Write([]byte(`{"error":true,"message":"transient"}`))
+			return
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	_, err := Run(context.Background(), Options{
+		URL:                  server.URL,
+		Index:                "cards",
+		DataFile:             writeBulkDataFixture(t),
+		AddToIndex:           true,
+		BatchSize:            1,
+		BulkRetryAttempts:    4,
+		BulkRetryBackoffBase: 200 * time.Millisecond,
+		BulkRetryBackoffMax:  300 * time.Millisecond,
+	})
+	if err == nil {
+		t.Fatal("expected Run to fail")
+	}
+	if bulkAttempts != 4 {
+		t.Fatalf("expected 4 bulk attempts, got %d", bulkAttempts)
+	}
+	wantSleeps := []time.Duration{200 * time.Millisecond, 300 * time.Millisecond, 300 * time.Millisecond}
+	if !reflect.DeepEqual(sleeps, wantSleeps) {
+		t.Fatalf("retry sleeps mismatch: got %v want %v", sleeps, wantSleeps)
+	}
+}
+
+// writeBulkDataFixture centralizes this code path so package behavior stays consistent.
+func writeBulkDataFixture(t *testing.T) string {
+	t.Helper()
+
+	path := filepath.Join(t.TempDir(), "bulk.json")
+	if err := os.WriteFile(path, []byte(`[{"id":"1","name":"card"}]`), 0o644); err != nil {
+		t.Fatalf("write bulk fixture: %v", err)
+	}
+	return path
+}
+
 // firstOperationIndex centralizes this code path so package behavior stays consistent.
 func firstOperationIndex(operations []string, operation string) int {
 	for idx, current := range operations {
