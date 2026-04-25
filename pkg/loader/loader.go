@@ -2877,6 +2877,13 @@ func executeEnrichPolicy(es *elasticsearch.Client, policy string) bool {
 			log.Error().Err(err).Str("policy", policy).Str("task", taskID).Msg("Failed to poll enrich policy task")
 			return false
 		}
+
+		// 404 means ES has already removed the completed task record.
+		if taskRes.StatusCode == http.StatusNotFound {
+			taskRes.Body.Close()
+			return logEnrichResult(policy, nil, startTime)
+		}
+
 		var task taskGetResponse
 		decodeErr := json.NewDecoder(taskRes.Body).Decode(&task)
 		taskRes.Body.Close()
@@ -2889,19 +2896,21 @@ func executeEnrichPolicy(es *elasticsearch.Client, policy string) bool {
 		if task.Task.Status != nil {
 			phase = task.Task.Status.Phase
 		}
-		log.Debug().
-			Str("policy", policy).
-			Str("phase", phase).
-			Float64("elapsed_s", time.Since(startTime).Seconds()).
-			Msg("Enrich policy execution in progress")
 
-		if task.Completed {
+		// completed=true or a response object present both signal the task is done.
+		if task.Completed || task.Response != nil {
 			status := task.Task.Status
 			if task.Response != nil && task.Response.Status != nil {
 				status = task.Response.Status
 			}
 			return logEnrichResult(policy, status, startTime)
 		}
+
+		log.Debug().
+			Str("policy", policy).
+			Str("phase", phase).
+			Float64("elapsed_s", time.Since(startTime).Seconds()).
+			Msg("Enrich policy execution in progress")
 
 		if pollCount == 5 {
 			pollInterval = 5 * time.Second
